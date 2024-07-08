@@ -124,14 +124,22 @@ suspend fun PointerInputScope.detectAdvancedVerticalDragGestures(
     }
 }
 
+internal suspend fun PointerInputScope.detectTap(
+    onTap: (Offset) -> Unit
+) {
+    awaitEachGesture {
 
+    }
+}
 
 suspend fun PointerInputScope.detectDragGesturesCustom(
+    onTap: (Offset) -> Unit,
     onDragStart: (Offset) -> Unit = { },
     onDragEnd: () -> Unit = { },
     onDragCancel: () -> Unit = { },
     onDrag: (change: PointerInputChange, dragAmount: Offset) -> Unit
 ) {
+
     awaitEachGesture {
         val down = awaitFirstDown(requireUnconsumed = false)
 
@@ -166,6 +174,8 @@ suspend fun PointerInputScope.detectDragGesturesCustom(
             } else {
                 onDragEnd()
             }
+        } else {
+            onTap.invoke(down.position)
         }
     }
 }

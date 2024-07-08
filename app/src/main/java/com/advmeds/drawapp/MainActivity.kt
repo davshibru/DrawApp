@@ -48,6 +48,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.advmeds.drawapp.ui.theme.DrawAppTheme
 import android.graphics.Paint
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -92,9 +93,9 @@ class MainActivity : ComponentActivity() {
                     val lines = remember { mutableStateOf<DrawBunch>(emptyList()) }
 
                     val textSizeList = listOf(
-                        13.sp,
-                        18.sp,
-                        25.sp
+                        13,
+                        18,
+                        25
                     )
 
                     val colorList = listOf(
@@ -113,7 +114,11 @@ class MainActivity : ComponentActivity() {
                     )
 
                     val currentSize = remember {
-                        mutableStateOf(sizeList[0])
+                        mutableStateOf<Int?>(sizeList[0])
+                    }
+
+                    val currentTextSize = remember {
+                        mutableStateOf<Int?>(null)
                     }
 
                     val currentColor = remember {
@@ -123,9 +128,10 @@ class MainActivity : ComponentActivity() {
                     val scroll = rememberScrollState()
 
                     var showDialog by remember {
-                        mutableStateOf(true)
+                        mutableStateOf(false)
                     }
 
+                    val shape = MaterialTheme.shapes.small
 
                     Box(modifier = Modifier.fillMaxSize()) {
 
@@ -149,8 +155,37 @@ class MainActivity : ComponentActivity() {
                             }
 
                             item {
-                                Row (modifier = Modifier.fillMaxSize(),
-                                    horizontalArrangement = Arrangement.spacedBy(10.dp)){
+                                Row(
+                                    modifier = Modifier.fillMaxSize(),
+                                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                                ) {
+
+                                    textSizeList.forEach { size ->
+                                        Box(
+                                            modifier = Modifier
+                                                .size(30.dp)
+                                                .border(
+                                                    color = Color.Gray,
+                                                    width = 1.dp,
+                                                    shape = shape
+                                                )
+                                                .background(
+                                                    color = if (currentTextSize.value == size) Color.Gray else Color.White,
+                                                    shape = shape,
+                                                )
+                                                .clickable {
+                                                    currentSize.value = null
+                                                    currentTextSize.value = size
+                                                }
+                                        ) {
+                                            Text(
+                                                modifier = Modifier.align(Alignment.Center),
+                                                text = "T",
+                                                fontSize = size.sp
+                                            )
+                                        }
+                                    }
+
 
                                 }
                             }
@@ -161,8 +196,6 @@ class MainActivity : ComponentActivity() {
                                     modifier = Modifier.fillMaxWidth(),
                                     horizontalArrangement = Arrangement.spacedBy(10.dp)
                                 ) {
-
-                                    val shape = MaterialTheme.shapes.small
 
                                     sizeList.forEach { size ->
                                         Box(
@@ -178,6 +211,7 @@ class MainActivity : ComponentActivity() {
                                                     shape = shape,
                                                 )
                                                 .clickable {
+                                                    currentTextSize.value = null
                                                     currentSize.value = size
                                                 }
                                         ) {
@@ -234,6 +268,7 @@ class MainActivity : ComponentActivity() {
                                         image = bitmap,
                                         currentColorIndex = currentColor,
                                         currentSize = currentSize,
+                                        currentTextSize = currentTextSize,
                                         drawBunch = lines.value,
                                         setTextDialogIsEnable = {
                                             showDialog = true
@@ -293,12 +328,15 @@ class MainActivity : ComponentActivity() {
     private fun DrawingScreen(
         image: ImageBitmap,
         currentColorIndex: MutableState<Color>,
-        currentSize: MutableState<Int>,
+        currentSize: MutableState<Int?>,
+        currentTextSize: MutableState<Int?>,
         drawBunch: DrawBunch,
         setTextDialogIsEnable: (Boolean) -> Unit,
         addDrawLineObjectInBunch: (line: DrawLine) -> Unit,
     ) {
 //        val lines = remember { mutableStateListOf<Line>() }
+
+        var textPosition by remember { mutableStateOf(Offset.Zero) }
 
         val currentLine = remember {
             mutableStateListOf<Line>()
@@ -315,12 +353,29 @@ class MainActivity : ComponentActivity() {
                 modifier = Modifier
                     .size(width, height)
                     .pointerInput(true) {
+//                        when {
+//                            currentSize.value != null -> {
                         detectDragGesturesCustom(
+                            onTap = { offset ->
+
+                                if (currentTextSize.value == null) {
+                                    return@detectDragGesturesCustom
+                                }
+
+                                textPosition = offset
+                                setTextDialogIsEnable.invoke(true)
+                                Log.d("check---", "DrawingScreen: $offset")
+                            },
                             onDragStart = { offset ->
                                 Log.d("check---", "DrawingScreen: Start drawing")
                             },
                             onDragEnd = {
                                 Log.d("check---", "DrawingScreen: Start end")
+
+                                if (currentSize.value == null) {
+                                    return@detectDragGesturesCustom
+                                }
+
                                 val drawLine = DrawLine(
                                     list = currentLine.toList(),
                                 )
@@ -330,6 +385,10 @@ class MainActivity : ComponentActivity() {
                             },
                             onDragCancel = {
                                 Log.d("check---", "DrawingScreen: Start cancel")
+
+                                if (currentSize.value == null) {
+                                    return@detectDragGesturesCustom
+                                }
 
                                 val drawLine = DrawLine(
                                     list = currentLine.toList(),
@@ -341,15 +400,16 @@ class MainActivity : ComponentActivity() {
                         ) { change, dragAmount ->
                             change.consume()
 
+                            if (currentSize.value == null) {
+                                return@detectDragGesturesCustom
+                            }
+
                             val line = Line(
                                 start = change.position - dragAmount,
                                 end = change.position,
                                 color = currentColorIndex.value,
-                                strokeWidth = currentSize.value.toDp()
+                                strokeWidth = currentSize.value!!.toDp()
                             )
-
-
-//                            addLineInList.invoke(line)
 
                             currentLine.add(line)
                         }
@@ -494,5 +554,19 @@ fun DialogContent(onDismiss: () -> Unit) {
                 }
             }
         }
+    }
+}
+
+fun Modifier.conditional(
+    condition: Boolean,
+    ifTrue: Modifier.() -> Modifier,
+    ifFalse: (Modifier.() -> Modifier)? = null,
+): Modifier {
+    return if (condition) {
+        then(ifTrue(Modifier))
+    } else if (ifFalse != null) {
+        then(ifFalse(Modifier))
+    } else {
+        this
     }
 }
