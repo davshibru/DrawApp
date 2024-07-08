@@ -21,7 +21,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.Divider
 import androidx.compose.material3.MaterialTheme
@@ -48,7 +47,6 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.advmeds.drawapp.ui.theme.DrawAppTheme
 import android.graphics.Paint
-import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -59,9 +57,10 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.TextField
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
-import androidx.compose.runtime.snapshots.SnapshotStateList
+import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.sp
@@ -88,9 +87,7 @@ class MainActivity : ComponentActivity() {
                     var newBitmap: Bitmap? = null
 //                    val image = remember { drawToBitmap(bitmap.asImageBitmap()) }
 
-                    val currentTool = remember { mutableStateOf(DrawMode.Line) }
-
-                    val lines = remember { mutableStateOf<DrawBunch>(emptyList()) }
+                    val drawBunch = remember { mutableStateOf<DrawBunch>(emptyList()) }
 
                     val textSizeList = listOf(
                         13,
@@ -113,6 +110,10 @@ class MainActivity : ComponentActivity() {
                         7,
                     )
 
+                    val currentText = remember {
+                        mutableStateOf<String?>(null)
+                    }
+
                     val currentSize = remember {
                         mutableStateOf<Int?>(sizeList[0])
                     }
@@ -124,8 +125,6 @@ class MainActivity : ComponentActivity() {
                     val currentColor = remember {
                         mutableStateOf(colorList[0])
                     }
-
-                    val scroll = rememberScrollState()
 
                     var showDialog by remember {
                         mutableStateOf(false)
@@ -145,7 +144,8 @@ class MainActivity : ComponentActivity() {
                                 val density = LocalDensity.current
 
                                 Button(onClick = {
-                                    newBitmap = createBitmapFromLines(bitmap, lines.value, density)
+                                    newBitmap =
+                                        createBitmapFromLines(bitmap, drawBunch.value, density)
 
                                     Log.d("check---", "onCreate: $newBitmap")
 
@@ -266,18 +266,27 @@ class MainActivity : ComponentActivity() {
                                 ) {
                                     DrawingScreen(
                                         image = bitmap,
-                                        currentColorIndex = currentColor,
+                                        currentColor = currentColor,
                                         currentSize = currentSize,
                                         currentTextSize = currentTextSize,
-                                        drawBunch = lines.value,
+                                        currentText = currentText,
+                                        drawBunch = drawBunch.value,
                                         setTextDialogIsEnable = {
                                             showDialog = true
                                         },
-                                    ) { line ->
-                                        val temLineList = lines.value.toMutableList()
-                                        temLineList.add(line)
-                                        lines.value = temLineList
-                                    }
+                                        addDrawTextObjectInBunch = { text ->
+                                            currentText.value = null
+
+                                            val tempDrawObjectList = drawBunch.value.toMutableList()
+                                            tempDrawObjectList.add(text)
+                                            drawBunch.value = tempDrawObjectList
+                                        },
+                                        addDrawLineObjectInBunch = { line ->
+                                            val tempDrawObjectList = drawBunch.value.toMutableList()
+                                            tempDrawObjectList.add(line)
+                                            drawBunch.value = tempDrawObjectList
+                                        }
+                                    )
                                 }
                             }
 
@@ -311,13 +320,16 @@ class MainActivity : ComponentActivity() {
 
                         if (showDialog) {
                             DialogContent(
+                                onSubmit = { text ->
+                                    currentText.value = text
+                                    showDialog = false
+                                },
                                 onDismiss = {
                                     showDialog = false
                                 }
                             )
                         }
                     }
-
                 }
             }
         }
@@ -327,11 +339,13 @@ class MainActivity : ComponentActivity() {
     @Composable
     private fun DrawingScreen(
         image: ImageBitmap,
-        currentColorIndex: MutableState<Color>,
+        currentColor: MutableState<Color>,
         currentSize: MutableState<Int?>,
         currentTextSize: MutableState<Int?>,
+        currentText: MutableState<String?>,
         drawBunch: DrawBunch,
         setTextDialogIsEnable: (Boolean) -> Unit,
+        addDrawTextObjectInBunch: (text: DrawText) -> Unit,
         addDrawLineObjectInBunch: (line: DrawLine) -> Unit,
     ) {
 //        val lines = remember { mutableStateListOf<Line>() }
@@ -340,6 +354,22 @@ class MainActivity : ComponentActivity() {
 
         val currentLine = remember {
             mutableStateListOf<Line>()
+        }
+
+        LaunchedEffect(currentText.value) {
+            if (!currentText.value.isNullOrBlank()) {
+                val drawText = DrawText(
+                    text = currentText.value!!,
+                    color = currentColor.value,
+                    position = textPosition,
+                    fontSize = currentTextSize.value!!
+                )
+
+                textPosition = Offset.Zero
+
+                addDrawTextObjectInBunch.invoke(drawText)
+            }
+
         }
 
         BoxWithConstraints {
@@ -353,8 +383,6 @@ class MainActivity : ComponentActivity() {
                 modifier = Modifier
                     .size(width, height)
                     .pointerInput(true) {
-//                        when {
-//                            currentSize.value != null -> {
                         detectDragGesturesCustom(
                             onTap = { offset ->
 
@@ -407,7 +435,7 @@ class MainActivity : ComponentActivity() {
                             val line = Line(
                                 start = change.position - dragAmount,
                                 end = change.position,
-                                color = currentColorIndex.value,
+                                color = currentColor.value,
                                 strokeWidth = currentSize.value!!.toDp()
                             )
 
@@ -419,7 +447,22 @@ class MainActivity : ComponentActivity() {
 
                 drawBunch.forEach { bunch ->
                     when (bunch.drawObjectType) {
-                        DrawMode.Text -> {}
+                        DrawMode.Text -> {
+
+                            val textObject = (bunch as DrawText)
+
+
+                            drawContext.canvas.nativeCanvas.drawText(
+                                textObject.text,
+                                textObject.position.x,
+                                textObject.position.y,
+                                Paint().apply {
+                                    color = textObject.color.toArgb()
+                                    textSize = with(density) { textObject.fontSize.sp.toPx() }
+                                }
+                            )
+                        }
+
                         DrawMode.Line -> {
                             (bunch as DrawLine).list.forEach { line ->
                                 drawLine(
@@ -457,7 +500,19 @@ class MainActivity : ComponentActivity() {
         drawBunch.forEach { bunch ->
 
             when (bunch.drawObjectType) {
-                DrawMode.Text -> {}
+                DrawMode.Text -> {
+                    val textObject = (bunch as DrawText)
+
+                    paint.color = textObject.color.toArgb()
+                    paint.textSize = with(density) { textObject.fontSize.sp.toPx() }
+
+                    canvas.drawText(
+                        textObject.text,
+                        textObject.position.x,
+                        textObject.position.y,
+                        paint
+                    )
+                }
                 DrawMode.Line -> {
                     (bunch as DrawLine).list.forEach { line ->
                         paint.color = line.color.toArgb()
@@ -508,6 +563,10 @@ data class DrawLine(
 
 data class DrawText(
     override val drawObjectType: DrawMode = DrawMode.Text,
+    val text: String,
+    val color: Color,
+    val position: Offset,
+    val fontSize: Int,
 ) : DrawObject
 
 data class Line(
@@ -519,7 +578,7 @@ data class Line(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun DialogContent(onDismiss: () -> Unit) {
+fun DialogContent(onDismiss: () -> Unit, onSubmit: (String) -> Unit) {
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -549,9 +608,21 @@ fun DialogContent(onDismiss: () -> Unit) {
                 )
                 Spacer(modifier = Modifier.height(8.dp))
 
-                Button(onClick = onDismiss) {
-                    Text("Submit")
+                Row {
+
+                    Button(onClick = onDismiss) {
+                        Text("cancel")
+                    }
+                    Button(
+                        enabled = text.isNotBlank(),
+                        onClick = {
+                            onSubmit.invoke(text)
+                        }
+                    ) {
+                        Text("Submit")
+                    }
                 }
+
             }
         }
     }
