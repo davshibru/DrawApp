@@ -2,7 +2,9 @@ package com.advmeds.drawapp
 
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import android.graphics.Matrix
 import android.graphics.Paint
+import android.graphics.Rect
 import android.os.Bundle
 import android.util.Log
 import androidx.activity.ComponentActivity
@@ -53,6 +55,7 @@ import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
@@ -62,6 +65,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.advmeds.drawapp.ui.theme.DrawAppTheme
+import kotlinx.coroutines.delay
 import android.graphics.Canvas as AndroidCanvas
 import android.graphics.Color as AndroidColor
 
@@ -466,7 +470,10 @@ class MainActivity : ComponentActivity() {
 
                                             reDoStack.value = emptyList()
 
-                                            Log.d("check---", "onCreate: ${drawBunch.value.map { it.id }}")
+                                            Log.d(
+                                                "check---",
+                                                "onCreate: ${drawBunch.value.map { it.id }}"
+                                            )
                                         },
                                         addDrawLineObjectInBunch = { line ->
                                             val tempDrawObjectList = drawBunch.value.toMutableList()
@@ -478,7 +485,10 @@ class MainActivity : ComponentActivity() {
                                             drawBunch.value = tempDrawObjectList
                                             reDoStack.value = emptyList()
 
-                                            Log.d("check---", "onCreate: ${drawBunch.value.map { it.id }}")
+                                            Log.d(
+                                                "check---",
+                                                "onCreate: ${drawBunch.value.map { it.id }}"
+                                            )
                                         }
                                     )
                                 }
@@ -546,6 +556,8 @@ class MainActivity : ComponentActivity() {
     ) {
 //        val lines = remember { mutableStateListOf<Line>() }
 
+        var initialSize = remember { mutableStateOf(Offset.Zero) }
+
         var textPosition by remember { mutableStateOf(Offset.Zero) }
 
         val currentLine = remember {
@@ -584,7 +596,6 @@ class MainActivity : ComponentActivity() {
 
                 addDrawTextObjectInBunch.invoke(drawText)
             }
-
         }
 
         BoxWithConstraints {
@@ -708,7 +719,7 @@ class MainActivity : ComponentActivity() {
                                 if (selectTool.value != null) {
                                     val tempDrawBunch = drawBunch.value.toMutableList()
 
-                                    currentDragText.forEach {dragged ->
+                                    currentDragText.forEach { dragged ->
 
                                         val item = drawBunch.value.find { dragged.id == it.id }
                                         val index = drawBunch.value.indexOf(item)
@@ -912,15 +923,57 @@ class MainActivity : ComponentActivity() {
                 }
 
                 currentDragText.forEach { dragText ->
-                    drawContext.canvas.nativeCanvas.drawText(
-                        dragText.text,
-                        dragText.position.x,
-                        dragText.position.y,
-                        Paint().apply {
+//                    drawContext.canvas.nativeCanvas.drawText(
+//                        dragText.text,
+//                        dragText.position.x,
+//                        dragText.position.y,
+//                        Paint().apply {
+//                            color = dragText.color.toArgb()
+//                            textSize = dragText.fontSize.sp.toPx()
+//                        }
+//                    )
+
+                    drawIntoCanvas { canvas ->
+                        val paint = Paint().apply {
                             color = dragText.color.toArgb()
                             textSize = dragText.fontSize.sp.toPx()
                         }
-                    )
+                        val textBounds = Rect()
+                        paint.getTextBounds(
+                            dragText.text,
+                            0,
+                            dragText.text.length,
+                            textBounds
+                        )
+                        val textWidth = paint.measureText(dragText.text)
+                        val textHeight = textBounds.height()
+//
+//                        canvas.save()
+//                        canvas.nativeCanvas.concat(transformationMatrix)
+
+                        canvas.nativeCanvas.drawText(
+                            dragText.text,
+                            dragText.position.x,
+                            dragText.position.y,
+                            paint
+                        )
+
+
+//                        canvas.restore()
+
+                        val boundsPosition = Offset(
+                            x = dragText.position.x,
+                            y = dragText.position.y - textHeight
+                        )
+//                        if (dragText.isSelected) {
+                        drawResizeHandles(
+                            canvas = canvas.nativeCanvas,
+                            position = boundsPosition,
+                            size = Offset(textWidth, textHeight.toFloat()),
+                            resizeHandleSize = 20.dp,
+                        )
+//                        }
+                    }
                 }
 
 //                    drawIntoCanvas {
