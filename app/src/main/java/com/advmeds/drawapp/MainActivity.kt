@@ -2,6 +2,8 @@ package com.advmeds.drawapp
 
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import android.graphics.Paint
+import android.graphics.Rect
 import android.os.Bundle
 import android.util.Log
 import androidx.activity.ComponentActivity
@@ -16,54 +18,53 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.layout.wrapContentHeight
+import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Divider
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextField
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.MutableState
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
-import android.graphics.Color as AndroidColor
-import android.graphics.Canvas as AndroidCanvas
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import com.advmeds.drawapp.ui.theme.DrawAppTheme
-import android.graphics.Paint
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.wrapContentHeight
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.TextField
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.setValue
-import androidx.compose.ui.graphics.nativeCanvas
-import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.sp
+import com.advmeds.drawapp.ui.theme.DrawAppTheme
+import android.graphics.Canvas as AndroidCanvas
+import android.graphics.Color as AndroidColor
 
 
 typealias DrawBunch = List<DrawObject>
@@ -88,6 +89,8 @@ class MainActivity : ComponentActivity() {
 //                    val image = remember { drawToBitmap(bitmap.asImageBitmap()) }
 
                     val drawBunch = remember { mutableStateOf<DrawBunch>(emptyList()) }
+                    val reDoStack = remember { mutableStateOf<DrawBunch>(emptyList()) }
+                    var wasCleared by remember { mutableStateOf(false) }
 
                     val textSizeList = listOf(
                         13,
@@ -109,6 +112,10 @@ class MainActivity : ComponentActivity() {
                         5,
                         7,
                     )
+
+                    val selectTool = remember {
+                        mutableStateOf<Any?>(null)
+                    }
 
                     val currentText = remember {
                         mutableStateOf<String?>(null)
@@ -133,8 +140,6 @@ class MainActivity : ComponentActivity() {
                     val shape = MaterialTheme.shapes.small
 
                     Box(modifier = Modifier.fillMaxSize()) {
-
-
                         LazyColumn(
                             modifier = Modifier
                                 .fillMaxSize()
@@ -160,6 +165,187 @@ class MainActivity : ComponentActivity() {
                                     horizontalArrangement = Arrangement.spacedBy(10.dp)
                                 ) {
 
+                                    Box(
+                                        modifier = Modifier
+                                            .size(30.dp)
+                                            .border(
+                                                color = Color.Gray,
+                                                width = 1.dp,
+                                                shape = shape
+                                            )
+                                            .background(
+                                                color = if (selectTool.value != null) Color.Gray else Color.White,
+                                                shape = shape,
+                                            )
+                                            .clickable {
+                                                val newUnDoStack = drawBunch.value.toMutableList()
+
+                                                if (newUnDoStack.isEmpty()) {
+                                                    if (reDoStack.value.isEmpty()) {
+                                                        return@clickable
+                                                    }
+
+                                                    val lastReDoStackObject = reDoStack.value.last()
+
+                                                    val isLastActionWasClear =
+                                                        (lastReDoStackObject is DrawClear)
+                                                    Log.d(
+                                                        "check---",
+                                                        "onCreate: isLastActionWasClear $isLastActionWasClear"
+                                                    )
+
+                                                    if (!isLastActionWasClear) {
+                                                        return@clickable
+                                                    }
+
+                                                    val newUnDo = reDoStack.value
+
+                                                    drawBunch.value = newUnDo
+                                                    reDoStack.value = emptyList()
+
+
+                                                    return@clickable
+                                                }
+
+                                                val lastElement = newUnDoStack.removeLast()
+
+                                                val newRedoStack = reDoStack.value.toMutableList()
+
+                                                newRedoStack.add(lastElement)
+
+                                                drawBunch.value = newUnDoStack
+                                                reDoStack.value = newRedoStack
+                                            }
+                                    ) {
+                                        Icon(
+                                            modifier = Modifier.align(Alignment.Center),
+                                            painter = painterResource(id = R.drawable.undo_ic),
+                                            contentDescription = null
+                                        )
+                                    }
+
+                                    Box(
+                                        modifier = Modifier
+                                            .size(30.dp)
+                                            .border(
+                                                color = Color.Gray,
+                                                width = 1.dp,
+                                                shape = shape
+                                            )
+                                            .background(
+                                                color = if (selectTool.value != null) Color.Gray else Color.White,
+                                                shape = shape,
+                                            )
+                                            .clickable {
+                                                val newRedoStack = reDoStack.value.toMutableList()
+
+                                                if (newRedoStack.isEmpty()) {
+                                                    if (drawBunch.value.isEmpty()) {
+                                                        return@clickable
+                                                    }
+
+                                                    val lastReDoObject = drawBunch.value.last()
+
+                                                    val isLastUnDoActionWasClear =
+                                                        (lastReDoObject is DrawClear)
+
+                                                    if (!isLastUnDoActionWasClear) {
+                                                        return@clickable
+                                                    }
+
+                                                    val newReDo = drawBunch.value
+
+                                                    drawBunch.value = emptyList()
+                                                    reDoStack.value = newReDo
+
+                                                    return@clickable
+                                                }
+
+                                                val lastElement = newRedoStack.removeLast()
+
+                                                val newUnDoStack = drawBunch.value.toMutableList()
+
+                                                newUnDoStack.add(lastElement)
+
+                                                drawBunch.value = newUnDoStack
+                                                reDoStack.value = newRedoStack
+                                            }
+                                    ) {
+                                        Icon(
+                                            modifier = Modifier.align(Alignment.Center),
+                                            painter = painterResource(id = R.drawable.redo_ic),
+                                            contentDescription = null
+                                        )
+                                    }
+
+                                    Box(
+                                        modifier = Modifier
+                                            .size(30.dp)
+                                            .border(
+                                                color = Color.Gray,
+                                                width = 1.dp,
+                                                shape = shape
+                                            )
+                                            .background(
+                                                color = if (selectTool.value != null) Color.Gray else Color.White,
+                                                shape = shape,
+                                            )
+                                            .clickable {
+                                                val newUnDoStack = drawBunch.value.toMutableList()
+
+                                                if (newUnDoStack.isEmpty()) {
+                                                    return@clickable
+                                                }
+
+                                                val newRedoStack = newUnDoStack.toMutableList()
+
+                                                val clearState = DrawClear()
+
+                                                newRedoStack.add(clearState)
+
+                                                drawBunch.value = emptyList()
+                                                reDoStack.value = newRedoStack
+
+                                                Log.d(
+                                                    "check---",
+                                                    "onCreate: drawBunch.value - ${drawBunch.value} \nreDoStack.value - ${reDoStack.value} "
+                                                )
+                                            }
+                                    ) {
+                                        Icon(
+                                            modifier = Modifier.align(Alignment.Center),
+                                            painter = painterResource(id = R.drawable.clear_ic),
+                                            contentDescription = null
+                                        )
+                                    }
+
+                                    Box(
+                                        modifier = Modifier
+                                            .size(30.dp)
+                                            .border(
+                                                color = Color.Gray,
+                                                width = 1.dp,
+                                                shape = shape
+                                            )
+                                            .background(
+                                                color = if (selectTool.value != null) Color.Gray else Color.White,
+                                                shape = shape,
+                                            )
+                                            .clickable {
+                                                currentSize.value = null
+                                                currentTextSize.value = null
+                                                selectTool.value = Any()
+                                            }
+                                    ) {
+                                        Icon(
+                                            modifier = Modifier.align(Alignment.Center),
+                                            painter = painterResource(id = R.drawable.mouse_ic),
+                                            contentDescription = null
+                                        )
+                                    }
+
+
+
                                     textSizeList.forEach { size ->
                                         Box(
                                             modifier = Modifier
@@ -176,6 +362,7 @@ class MainActivity : ComponentActivity() {
                                                 .clickable {
                                                     currentSize.value = null
                                                     currentTextSize.value = size
+                                                    selectTool.value = null
                                                 }
                                         ) {
                                             Text(
@@ -213,6 +400,7 @@ class MainActivity : ComponentActivity() {
                                                 .clickable {
                                                     currentTextSize.value = null
                                                     currentSize.value = size
+                                                    selectTool.value = null
                                                 }
                                         ) {
                                             Box(
@@ -270,7 +458,8 @@ class MainActivity : ComponentActivity() {
                                         currentSize = currentSize,
                                         currentTextSize = currentTextSize,
                                         currentText = currentText,
-                                        drawBunch = drawBunch.value,
+                                        selectTool = selectTool,
+                                        drawBunch = drawBunch,
                                         setTextDialogIsEnable = {
                                             showDialog = true
                                         },
@@ -280,11 +469,17 @@ class MainActivity : ComponentActivity() {
                                             val tempDrawObjectList = drawBunch.value.toMutableList()
                                             tempDrawObjectList.add(text)
                                             drawBunch.value = tempDrawObjectList
+
+                                            reDoStack.value = emptyList()
+
+                                            Log.d("check---", "onCreate: $drawBunch")
                                         },
                                         addDrawLineObjectInBunch = { line ->
                                             val tempDrawObjectList = drawBunch.value.toMutableList()
                                             tempDrawObjectList.add(line)
+
                                             drawBunch.value = tempDrawObjectList
+                                            reDoStack.value = emptyList()
                                         }
                                     )
                                 }
@@ -343,7 +538,8 @@ class MainActivity : ComponentActivity() {
         currentSize: MutableState<Int?>,
         currentTextSize: MutableState<Int?>,
         currentText: MutableState<String?>,
-        drawBunch: DrawBunch,
+        selectTool: MutableState<Any?>,
+        drawBunch: MutableState<DrawBunch>,
         setTextDialogIsEnable: (Boolean) -> Unit,
         addDrawTextObjectInBunch: (text: DrawText) -> Unit,
         addDrawLineObjectInBunch: (line: DrawLine) -> Unit,
@@ -354,6 +550,22 @@ class MainActivity : ComponentActivity() {
 
         val currentLine = remember {
             mutableStateListOf<Line>()
+        }
+
+        val currentDragText = remember {
+            mutableStateOf<DrawText?>(null)
+        }
+
+        var touchIndex by remember {
+            mutableStateOf(-1)
+        }
+
+        val density = LocalDensity.current
+
+        LaunchedEffect(selectTool.value) {
+            if (selectTool.value == null) {
+                drawBunch.value.forEach { it.isSelected = false }
+            }
         }
 
         LaunchedEffect(currentText.value) {
@@ -385,72 +597,173 @@ class MainActivity : ComponentActivity() {
                     .pointerInput(true) {
                         detectDragGesturesCustom(
                             onTap = { offset ->
+//                                drawBunch.forEach { it.isSelected = false }
 
-                                if (currentTextSize.value == null) {
-                                    return@detectDragGesturesCustom
+                                if (currentTextSize.value != null) {
+                                    textPosition = offset
+                                    setTextDialogIsEnable.invoke(true)
                                 }
 
-                                textPosition = offset
-                                setTextDialogIsEnable.invoke(true)
+                                if (selectTool.value != null) {
+                                    touchIndex = -1
+
+                                    Log.d("check---", "DrawingScreen: $drawBunch")
+
+                                    drawBunch.value
+//                                        .filterList { drawObjectType == DrawMode.Text }
+                                        .asReversed()
+                                        .forEachIndexed { index, text ->
+
+                                            val isTouched = isPointInsideText(
+                                                offset,
+                                                (text as DrawText),
+                                                density = density
+                                            )
+
+                                            Log.d("check---", "DrawingScreen: $isTouched")
+                                            if (isTouched) {
+                                                touchIndex = index
+                                                return@detectDragGesturesCustom
+                                            }
+
+//                                            if (result
+//                                            ) {
+//                                                text.isSelected = true
+//                                                return@forEach
+//                                            }
+                                        }
+                                }
+
                                 Log.d("check---", "DrawingScreen: $offset")
                             },
                             onDragStart = { offset ->
                                 Log.d("check---", "DrawingScreen: Start drawing")
+
+//                                if (selectTool.value != null) {
+//                                    drawBunch.value
+//                                        .filterList { drawObjectType == DrawMode.Text }
+//                                        .asReversed()
+//                                        .forEach { text ->
+//                                            if (isPointInsideResizeHandle(
+//                                                    offset,
+//                                                    (text as DrawText),
+//                                                    density = density
+//                                                )
+//                                            ) {
+//                                                text.isSelected = true
+//                                                return@forEach
+//                                            } else {
+//                                                text.isSelected = false
+//                                            }
+//                                        }
+//                                }
+
                             },
                             onDragEnd = {
                                 Log.d("check---", "DrawingScreen: Start end")
 
-                                if (currentSize.value == null) {
-                                    return@detectDragGesturesCustom
+                                if (selectTool.value != null) {
+                                    val tempDrawBunch = drawBunch.value.toMutableList()
+
+                                    currentDragText.value?.let {
+                                        tempDrawBunch[touchIndex] = it
+                                    }
+
+                                    currentDragText.value = null
                                 }
 
-                                val drawLine = DrawLine(
-                                    list = currentLine.toList(),
-                                )
-                                addDrawLineObjectInBunch.invoke(drawLine)
-                                currentLine.clear()
+                                if (currentSize.value != null) {
+                                    val drawLine = DrawLine(
+                                        list = currentLine.toList(),
+                                    )
+                                    addDrawLineObjectInBunch.invoke(drawLine)
+                                    currentLine.clear()
+                                }
 
                             },
                             onDragCancel = {
                                 Log.d("check---", "DrawingScreen: Start cancel")
 
-                                if (currentSize.value == null) {
-                                    return@detectDragGesturesCustom
+                                if (selectTool.value != null) {
+                                    val tempDrawBunch = drawBunch.value.toMutableList()
+
+                                    currentDragText.value?.let {
+                                        tempDrawBunch[touchIndex] = it
+                                    }
+
+                                    currentDragText.value = null
                                 }
 
-                                val drawLine = DrawLine(
-                                    list = currentLine.toList(),
-                                )
-                                addDrawLineObjectInBunch.invoke(drawLine)
-
-                                currentLine.clear()
+                                if (currentSize.value != null) {
+                                    val drawLine = DrawLine(
+                                        list = currentLine.toList(),
+                                    )
+                                    addDrawLineObjectInBunch.invoke(drawLine)
+                                    currentLine.clear()
+                                }
                             },
-                        ) { change, dragAmount ->
-                            change.consume()
+                            onDrag = { change, dragAmount ->
+                                change.consume()
 
-                            if (currentSize.value == null) {
-                                return@detectDragGesturesCustom
+                                if (selectTool.value != null) {
+
+                                    currentDragText.value?.let { currentDrag ->
+                                        val position = currentDrag.position + dragAmount
+
+                                        currentDragText.value = currentDrag.copy(
+                                            position = position
+                                        )
+                                    }
+
+//                                    drawBunch.value
+//                                        .filterList { isSelected }
+//                                        .forEach { text ->
+//                                            (text as DrawText).position += dragAmount
+//                                        }
+
+//                                    val item = drawBunch.value.getOrNull(touchIndex)
+//
+//                                    item?.let { drawObject ->
+//
+//                                        val tempDrawBunch = drawBunch.value.toMutableList()
+//                                        val drawText = (drawObject as DrawText)
+//
+//                                        currentDragText = drawText
+//
+////                                        tempDrawBunch[touchIndex] = drawText.copy(
+////                                            position = drawText.position + dragAmount
+////                                        )
+//                                    }
+                                }
+
+                                if (currentSize.value != null) {
+                                    val line = Line(
+                                        start = change.position - dragAmount,
+                                        end = change.position,
+                                        color = currentColor.value,
+                                        strokeWidth = currentSize.value!!.toDp()
+                                    )
+
+                                    currentLine.add(line)
+                                }
+
+
                             }
-
-                            val line = Line(
-                                start = change.position - dragAmount,
-                                end = change.position,
-                                color = currentColor.value,
-                                strokeWidth = currentSize.value!!.toDp()
-                            )
-
-                            currentLine.add(line)
-                        }
+                        )
                     }
             ) {
                 drawImage(image)
 
-                drawBunch.forEach { bunch ->
+                drawBunch.value.forEachIndexed { index, bunch ->
+
+                    if (touchIndex == index) {
+                        return@forEachIndexed
+                    }
+
+
                     when (bunch.drawObjectType) {
                         DrawMode.Text -> {
-
                             val textObject = (bunch as DrawText)
-
 
                             drawContext.canvas.nativeCanvas.drawText(
                                 textObject.text,
@@ -458,9 +771,42 @@ class MainActivity : ComponentActivity() {
                                 textObject.position.y,
                                 Paint().apply {
                                     color = textObject.color.toArgb()
-                                    textSize = with(density) { textObject.fontSize.sp.toPx() }
+                                    textSize = textObject.fontSize.sp.toPx()
                                 }
                             )
+
+//                            drawIntoCanvas {
+//                                val paint = Paint().apply {
+//                                    color = textObject.color.toArgb()
+//                                    textSize = textObject.fontSize.sp.toPx()
+//                                }
+//
+//                                val textBounds = Rect()
+//                                paint.getTextBounds(
+//                                    textObject.text,
+//                                    0,
+//                                    textObject.text.length,
+//                                    textBounds
+//                                )
+//                                val textWidth = paint.measureText(textObject.text)
+//                                val textHeight = textBounds.height()
+//
+//                                it.nativeCanvas.drawText(
+//                                    textObject.text,
+//                                    textObject.position.x,
+//                                    textObject.position.y,
+//                                    paint
+//                                )
+//
+//                                if (textObject.isSelected) {
+//                                    drawResizeHandles(
+//                                        canvas = it.nativeCanvas,
+//                                        position = textObject.position,
+//                                        size = Offset(textWidth, textHeight.toFloat()),
+//                                        resizeHandleSize = 20.dp,
+//                                    )
+//                                }
+//                            }
                         }
 
                         DrawMode.Line -> {
@@ -475,7 +821,7 @@ class MainActivity : ComponentActivity() {
                             }
                         }
 
-                        DrawMode.Select -> {}
+                        DrawMode.Select, DrawMode.Clear -> {}
                     }
                 }
 
@@ -488,6 +834,42 @@ class MainActivity : ComponentActivity() {
                         cap = StrokeCap.Round
                     )
                 }
+
+
+//                    drawIntoCanvas {
+//                        val paint = Paint().apply {
+//                            color = textObject.color.toArgb()
+//                            textSize = textObject.fontSize.sp.toPx()
+//                        }
+//
+//                        val textBounds = Rect()
+//                        paint.getTextBounds(
+//                            textObject.text,
+//                            0,
+//                            textObject.text.length,
+//                            textBounds
+//                        )
+//                        val textWidth = paint.measureText(textObject.text)
+//                        val textHeight = textBounds.height()
+//
+//                        it.nativeCanvas.drawText(
+//                            textObject.text,
+//                            textObject.position.x,
+//                            textObject.position.y,
+//                            paint
+//                        )
+//
+//                        val position =
+//                            Offset(textObject.position.x, (textObject.position.y - textHeight))
+//
+//                        drawResizeHandles(
+//                            canvas = it.nativeCanvas,
+//                            position = position,
+//                            size = Offset(textWidth, textHeight.toFloat()),
+//                            resizeHandleSize = 20.dp,
+//                        )
+//                    }
+
             }
         }
     }
@@ -513,6 +895,7 @@ class MainActivity : ComponentActivity() {
                         paint
                     )
                 }
+
                 DrawMode.Line -> {
                     (bunch as DrawLine).list.forEach { line ->
                         paint.color = line.color.toArgb()
@@ -528,7 +911,7 @@ class MainActivity : ComponentActivity() {
                     }
                 }
 
-                DrawMode.Select -> {}
+                DrawMode.Select, DrawMode.Clear -> {}
             }
         }
 
@@ -543,35 +926,97 @@ class MainActivity : ComponentActivity() {
             (blue * 255).toInt()
         )
     }
+
+    fun drawResizeHandles(
+        canvas: android.graphics.Canvas,
+        position: Offset,
+        size: Offset,
+        resizeHandleSize: Dp
+    ) {
+        val halfResizeHandleSize = resizeHandleSize.value / 2
+        val topLeft = Offset(position.x - halfResizeHandleSize, position.y - halfResizeHandleSize)
+        val topRight =
+            Offset(position.x + size.x - halfResizeHandleSize, position.y - halfResizeHandleSize)
+        val bottomLeft =
+            Offset(position.x - halfResizeHandleSize, position.y + size.y - halfResizeHandleSize)
+        val bottomRight = Offset(
+            position.x + size.x - halfResizeHandleSize,
+            position.y + size.y - halfResizeHandleSize
+        )
+
+        val paint = Paint().apply {
+            color = Color.Black.toArgb()
+            style = Paint.Style.FILL
+        }
+
+        // Draw resize handles
+        canvas.drawRect(
+            topLeft.x,
+            topLeft.y,
+            topLeft.x + resizeHandleSize.value,
+            topLeft.y + resizeHandleSize.value,
+            paint
+        )
+        canvas.drawRect(
+            topRight.x,
+            topRight.y,
+            topRight.x + resizeHandleSize.value,
+            topRight.y + resizeHandleSize.value,
+            paint
+        )
+        canvas.drawRect(
+            bottomLeft.x,
+            bottomLeft.y,
+            bottomLeft.x + resizeHandleSize.value,
+            bottomLeft.y + resizeHandleSize.value,
+            paint
+        )
+        canvas.drawRect(
+            bottomRight.x,
+            bottomRight.y,
+            bottomRight.x + resizeHandleSize.value,
+            bottomRight.y + resizeHandleSize.value,
+            paint
+        )
+    }
 }
 
 
 enum class DrawMode {
     Text,
     Line,
-    Select
+    Select,
+    Clear,
 }
 
 interface DrawObject {
     val drawObjectType: DrawMode
+    var isSelected: Boolean
 }
 
 data class DrawLine(
     override val drawObjectType: DrawMode = DrawMode.Line,
+    override var isSelected: Boolean = false,
     val list: List<Line>,
 ) : DrawObject
 
 data class DrawText(
     override val drawObjectType: DrawMode = DrawMode.Text,
+    override var isSelected: Boolean = true,
     val text: String,
     val color: Color,
-    val position: Offset,
+    var position: Offset,
     val fontSize: Int,
 ) : DrawObject
 
+data class DrawClear(
+    override val drawObjectType: DrawMode = DrawMode.Clear,
+    override var isSelected: Boolean = false,
+) : DrawObject
+
 data class Line(
-    val start: Offset,
-    val end: Offset,
+    var start: Offset,
+    var end: Offset,
     val color: Color = Color.Black,
     val strokeWidth: Dp = 1.dp
 )
@@ -628,16 +1073,105 @@ fun DialogContent(onDismiss: () -> Unit, onSubmit: (String) -> Unit) {
     }
 }
 
-fun Modifier.conditional(
-    condition: Boolean,
-    ifTrue: Modifier.() -> Modifier,
-    ifFalse: (Modifier.() -> Modifier)? = null,
-): Modifier {
-    return if (condition) {
-        then(ifTrue(Modifier))
-    } else if (ifFalse != null) {
-        then(ifFalse(Modifier))
-    } else {
-        this
+fun isPointInsideText(point: Offset, textItem: DrawText, density: Density): Boolean {
+    val position = textItem.position
+    val textBounds = Rect()
+    val paint = Paint().apply {
+        textSize = with(density) { textItem.fontSize.dp.toPx() }
     }
+    paint.getTextBounds(textItem.text, 0, textItem.text.length, textBounds)
+    val textWidth = paint.measureText(textItem.text)
+    val textHeight = textBounds.height()
+
+    Log.d("check---", "isPointInsideResizeHandle: p $position")
+    Log.d("check---", "isPointInsideResizeHandle: s ($textWidth, $textHeight)")
+    Log.d("check---", "isPointInsideResizeHandle: o $point")
+
+//    val topLeft = Offset(position.x, position.y)
+//    val bottomRight = Offset(position.x + textWidth, position.y + textHeight)
+
+    val bottomLeft = Offset(position.x, position.y)
+    val topLeft = Offset(position.x, position.y - textHeight)
+    val topRight = Offset(position.x + textWidth, position.y - textHeight)
+    val bottomRight = Offset(position.x + textWidth, position.y)
+
+    val inLeft = point.x > topLeft.x
+    Log.d("check---", "isPointInsideResizeHandle: inLeft  $inLeft \n(${point.x} > ${topLeft.x}) ")
+    val inTop = point.y > topRight.y
+    Log.d("check---", "isPointInsideResizeHandle: inTop $inTop \n (${point.y} > ${topRight.y}) ")
+    val inRight = point.x < topRight.x
+    Log.d(
+        "check---",
+        "isPointInsideResizeHandle: inRight $inRight \n (${point.x} > ${topRight.x}) "
+    )
+    val inBottom = point.y < bottomRight.y
+    Log.d(
+        "check---",
+        "isPointInsideResizeHandle: inBottom $inBottom \n (${point.y} > ${bottomRight.y}) "
+    )
+
+    return inLeft && inTop && inRight && inBottom
+//    return point.x in topLeft.x..bottomRight.x && point.y in topLeft.y..bottomRight.y
 }
+
+//fun isPointInsideResizeHandle(point: Offset, textItem: DrawText, density: Density): Boolean {
+//    val resizeHandleSize = 20.dp.value
+//    val position = textItem.position
+//    val size = with(density) {
+//        Offset(
+//            textItem.text.length * textItem.fontSize.dp.toPx(),
+//            textItem.fontSize.dp.toPx()
+//        )
+//    }
+//
+//
+//    Log.d("check---", "isPointInsideResizeHandle: p $position")
+//    Log.d("check---", "isPointInsideResizeHandle: s $size")
+//    Log.d("check---", "isPointInsideResizeHandle: o $point")
+//
+//    val topLeft = Offset(position.x, position.y)
+//    val topRight = Offset(position.x + size.x, position.y)
+//    val bottomLeft = Offset(position.x, position.y + size.y)
+//    val bottomRight = Offset(position.x + size.x, position.y + size.y)
+//
+//    val handleBounds = RectF(
+//        /* left = */ topLeft.x - resizeHandleSize,
+//        /* top = */ topLeft.y - resizeHandleSize,
+//        /* right = */ bottomRight.x + resizeHandleSize,
+//        /* bottom = */ bottomRight.y + resizeHandleSize
+//    )
+//
+//
+//    return handleBounds.contains(point.x, point.y)
+//}
+
+
+//private fun isTouched(
+//    drawText: DrawText,
+//    touchPosition: Offset,
+//    radius: Float,
+//    density: Density
+//): Boolean {
+////    return center.minus(touchPosition).getDistanceSquared() < radius * radius
+//
+//    val bonusArea = 20f
+//    val position = drawText.position
+//    val size = with(density) {
+//        Offset(
+//            drawText.text.length * drawText.fontSize.dp.toPx(),
+//            drawText.fontSize.dp.toPx()
+//        )
+//    }
+//
+//
+//    val topLeft = Offset(position.x, position.y)
+//
+//
+//    val bounds = RectF(
+//        position.x - bonusArea,
+//        position.y - bonusArea,
+//
+//        )
+//
+//    return
+//}
