@@ -89,7 +89,7 @@ class MainActivity : ComponentActivity() {
 
                     val drawBunch = remember { mutableStateOf<DrawBunch>(emptyList()) }
                     val reDoStack = remember { mutableStateOf<DrawBunch>(emptyList()) }
-                    var wasCleared by remember { mutableStateOf(false) }
+                    val drawObjectIdCounter = remember { mutableStateOf(0) }
 
                     val textSizeList = listOf(
                         13,
@@ -444,6 +444,7 @@ class MainActivity : ComponentActivity() {
                                 ) {
                                     DrawingScreen(
                                         image = bitmap,
+                                        drawObjectIdCounter = drawObjectIdCounter,
                                         currentColor = currentColor,
                                         currentSize = currentSize,
                                         currentTextSize = currentTextSize,
@@ -458,18 +459,26 @@ class MainActivity : ComponentActivity() {
 
                                             val tempDrawObjectList = drawBunch.value.toMutableList()
                                             tempDrawObjectList.add(text)
+
+                                            drawObjectIdCounter.value += 1
+
                                             drawBunch.value = tempDrawObjectList
 
                                             reDoStack.value = emptyList()
 
-                                            Log.d("check---", "onCreate: $drawBunch")
+                                            Log.d("check---", "onCreate: ${drawBunch.value.map { it.id }}")
                                         },
                                         addDrawLineObjectInBunch = { line ->
                                             val tempDrawObjectList = drawBunch.value.toMutableList()
+
                                             tempDrawObjectList.add(line)
+
+                                            drawObjectIdCounter.value += 1
 
                                             drawBunch.value = tempDrawObjectList
                                             reDoStack.value = emptyList()
+
+                                            Log.d("check---", "onCreate: ${drawBunch.value.map { it.id }}")
                                         }
                                     )
                                 }
@@ -524,6 +533,7 @@ class MainActivity : ComponentActivity() {
     @Composable
     private fun DrawingScreen(
         image: ImageBitmap,
+        drawObjectIdCounter: MutableState<Int>,
         currentColor: MutableState<Color>,
         currentSize: MutableState<Int?>,
         currentTextSize: MutableState<Int?>,
@@ -543,7 +553,7 @@ class MainActivity : ComponentActivity() {
         }
 
         val currentDragText = remember {
-            mutableStateListOf<Pair<Int, DrawText>>()
+            mutableStateListOf<DrawText>()
         }
 
         var touchIndex by remember {
@@ -563,6 +573,7 @@ class MainActivity : ComponentActivity() {
         LaunchedEffect(currentText.value) {
             if (!currentText.value.isNullOrBlank()) {
                 val drawText = DrawText(
+                    id = drawObjectIdCounter.value,
                     text = currentText.value!!,
                     color = currentColor.value,
                     position = textPosition,
@@ -617,7 +628,7 @@ class MainActivity : ComponentActivity() {
                                             if (isTouched) {
                                                 touchIndex = index
 
-                                                currentDragText.add(Pair(index, text))
+                                                currentDragText.add(text)
 
                                                 return@detectDragGesturesCustom
                                             }
@@ -654,7 +665,7 @@ class MainActivity : ComponentActivity() {
                                             if (isTouched) {
                                                 touchIndex = index
 
-                                                currentDragText.add(Pair(index, text))
+                                                currentDragText.add(text)
 
                                                 return@detectDragGesturesCustom
                                             }
@@ -697,15 +708,22 @@ class MainActivity : ComponentActivity() {
                                 if (selectTool.value != null) {
                                     val tempDrawBunch = drawBunch.value.toMutableList()
 
-                                    currentDragText.forEach {
-                                        tempDrawBunch[it.first] = it.second
+                                    currentDragText.forEach {dragged ->
+
+                                        val item = drawBunch.value.find { dragged.id == it.id }
+                                        val index = drawBunch.value.indexOf(item)
+
+                                        if (index > -1) {
+                                            tempDrawBunch[index] = dragged
+                                        }
                                     }
 
-                                    drawBunch.value = tempDrawBunch.reversed()
+                                    drawBunch.value = tempDrawBunch
                                 }
 
                                 if (currentSize.value != null) {
                                     val drawLine = DrawLine(
+                                        id = drawObjectIdCounter.value,
                                         list = currentLine.toList(),
                                     )
                                     addDrawLineObjectInBunch.invoke(drawLine)
@@ -717,10 +735,14 @@ class MainActivity : ComponentActivity() {
                                 Log.d("check---", "DrawingScreen: Start cancel")
 
                                 if (selectTool.value != null) {
-                                    val tempDrawBunch = drawBunch.value.reversed().toMutableList()
+                                    val tempDrawBunch = drawBunch.value
+                                        .reversed()
+                                        .toMutableList()
 
                                     currentDragText.forEach {
-                                        tempDrawBunch[it.first] = it.second
+                                        val index = drawBunch.value.indexOf(it)
+
+                                        tempDrawBunch[index] = it
                                     }
 
                                     drawBunch.value = tempDrawBunch.reversed()
@@ -728,6 +750,7 @@ class MainActivity : ComponentActivity() {
 
                                 if (currentSize.value != null) {
                                     val drawLine = DrawLine(
+                                        id = drawObjectIdCounter.value,
                                         list = currentLine.toList(),
                                     )
                                     addDrawLineObjectInBunch.invoke(drawLine)
@@ -739,15 +762,15 @@ class MainActivity : ComponentActivity() {
 
                                 if (selectTool.value != null) {
 
-                                    val newList = mutableListOf<Pair<Int, DrawText>>()
+                                    val newList = mutableListOf<DrawText>()
 
                                     currentDragText.forEach {
 
-                                        val dragText = it.second.copy(
-                                            position = it.second.position + dragAmount
+                                        val dragText = it.copy(
+                                            position = it.position + dragAmount
                                         )
 
-                                        newList.add(Pair(it.first, dragText))
+                                        newList.add(dragText)
                                     }
 
                                     currentDragText.clear()
@@ -809,7 +832,7 @@ class MainActivity : ComponentActivity() {
 
                 drawBunch.value.forEachIndexed { index, bunch ->
 
-                    if (touchIndex == index) {
+                    if (currentDragText.map { it.id }.contains(bunch.id)) {
                         return@forEachIndexed
                     }
 
@@ -888,7 +911,7 @@ class MainActivity : ComponentActivity() {
                     )
                 }
 
-                currentDragText.forEach { (index, dragText) ->
+                currentDragText.forEach { dragText ->
                     drawContext.canvas.nativeCanvas.drawText(
                         dragText.text,
                         dragText.position.x,
@@ -1054,17 +1077,20 @@ enum class DrawMode {
 }
 
 interface DrawObject {
+    val id: Int
     val drawObjectType: DrawMode
     var isSelected: Boolean
 }
 
 data class DrawLine(
+    override val id: Int,
     override val drawObjectType: DrawMode = DrawMode.Line,
     override var isSelected: Boolean = false,
     val list: List<Line>,
 ) : DrawObject
 
 data class DrawText(
+    override val id: Int,
     override val drawObjectType: DrawMode = DrawMode.Text,
     override var isSelected: Boolean = true,
     val text: String,
@@ -1074,6 +1100,7 @@ data class DrawText(
 ) : DrawObject
 
 data class DrawClear(
+    override val id: Int = -1,
     override val drawObjectType: DrawMode = DrawMode.Clear,
     override var isSelected: Boolean = false,
 ) : DrawObject
