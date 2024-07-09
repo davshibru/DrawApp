@@ -1,5 +1,8 @@
 package com.advmeds.drawapp
 
+import android.graphics.Paint
+import android.graphics.Rect
+import android.util.Log
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.calculateCentroid
@@ -307,3 +310,45 @@ internal fun ViewConfiguration.pointerSlopCustom(pointerType: PointerType): Floa
 private val mouseSlop = 0.125.dp
 private val defaultTouchSlop = 18.dp // The default touch slop on Android devices
 private val mouseToTouchSlopRatio = mouseSlop / defaultTouchSlop
+
+
+
+
+fun isPointInsideText(point: Offset, textItem: DrawText, density: Density): Boolean {
+    val position = textItem.position
+    val textBounds = Rect()
+    val paint = Paint().apply {
+        textSize = with(density) { textItem.fontSize.dp.toPx() }
+    }
+    paint.getTextBounds(textItem.text, 0, textItem.text.length, textBounds)
+    val textWidth = paint.measureText(textItem.text)
+    val textHeight = textBounds.height()
+
+    Log.d("check---", "isPointInsideResizeHandle: p $position")
+    Log.d("check---", "isPointInsideResizeHandle: s ($textWidth, $textHeight)")
+    Log.d("check---", "isPointInsideResizeHandle: o $point")
+
+//    val topLeft = Offset(position.x, position.y)
+//    val bottomRight = Offset(position.x + textWidth, position.y + textHeight)
+
+    val bottomLeft = Offset(position.x, position.y)
+    val topRight = Offset(position.x + textWidth, position.y - textHeight)
+
+    val inLeft = point.x > bottomLeft.x
+    Log.d("check---", "isPointInsideResizeHandle: inLeft  $inLeft \n(${point.x} > ${bottomLeft.x}) ")
+    val inTop = point.y > topRight.y
+    Log.d("check---", "isPointInsideResizeHandle: inTop $inTop \n (${point.y} > ${topRight.y}) ")
+    val inRight = point.x < topRight.x
+    Log.d(
+        "check---",
+        "isPointInsideResizeHandle: inRight $inRight \n (${point.x} > ${topRight.x}) "
+    )
+    val inBottom = point.y < bottomLeft.y
+    Log.d(
+        "check---",
+        "isPointInsideResizeHandle: inBottom $inBottom \n (${point.y} > ${bottomLeft.y}) "
+    )
+
+    return inLeft && inTop && inRight && inBottom
+//    return point.x in topLeft.x..bottomRight.x && point.y in topLeft.y..bottomRight.y
+}
