@@ -312,7 +312,57 @@ private val defaultTouchSlop = 18.dp // The default touch slop on Android device
 private val mouseToTouchSlopRatio = mouseSlop / defaultTouchSlop
 
 
+fun getTextWidthAndHeight(textItem: DrawText, density: Density): Pair<Float, Float> {
+    val textBounds = Rect()
+    val paint = Paint().apply {
+        textSize = with(density) { textItem.fontSize.dp.toPx() }
+    }
+    paint.getTextBounds(textItem.text, 0, textItem.text.length, textBounds)
+    val textWidth = paint.measureText(textItem.text)
+    val textHeight = textBounds.height()
 
+    return Pair(textWidth, textHeight.toFloat())
+}
+
+fun isPointInsideResizeHandle(point: Offset, textItem: DrawText, density: Density): Corner? {
+    val position = textItem.position
+    val textBounds = Rect()
+    val paint = Paint().apply {
+        textSize = with(density) { textItem.fontSize.dp.toPx() }
+    }
+    paint.getTextBounds(textItem.text, 0, textItem.text.length, textBounds)
+    val textWidth = paint.measureText(textItem.text)
+    val textHeight = textBounds.height()
+
+    val topLeft = Offset(position.x, position.y - textHeight)
+    val topRight = Offset(position.x + textWidth, position.y - textHeight)
+    val bottomRight = Offset(position.x + textWidth, position.y)
+    val bottomLeft = Offset(position.x, position.y)
+
+    val radius = 20
+
+    if (topLeft.minus(point).getDistanceSquared() < radius * radius) {
+        return Corner.TopLeft
+    }
+    if (topRight.minus(point).getDistanceSquared() < radius * radius) {
+        return Corner.TopRight
+    }
+    if (bottomRight.minus(point).getDistanceSquared() < radius * radius) {
+        return Corner.BottomRight
+    }
+    if (bottomLeft.minus(point).getDistanceSquared() < radius * radius) {
+        return Corner.BottomLeft
+    }
+
+    return null
+}
+
+enum class Corner {
+    TopLeft,
+    TopRight,
+    BottomRight,
+    BottomLeft,
+}
 
 fun isPointInsideText(point: Offset, textItem: DrawText, density: Density): Boolean {
     val position = textItem.position
@@ -324,31 +374,13 @@ fun isPointInsideText(point: Offset, textItem: DrawText, density: Density): Bool
     val textWidth = paint.measureText(textItem.text)
     val textHeight = textBounds.height()
 
-    Log.d("check---", "isPointInsideResizeHandle: p $position")
-    Log.d("check---", "isPointInsideResizeHandle: s ($textWidth, $textHeight)")
-    Log.d("check---", "isPointInsideResizeHandle: o $point")
-
-//    val topLeft = Offset(position.x, position.y)
-//    val bottomRight = Offset(position.x + textWidth, position.y + textHeight)
-
     val bottomLeft = Offset(position.x, position.y)
     val topRight = Offset(position.x + textWidth, position.y - textHeight)
 
     val inLeft = point.x > bottomLeft.x
-    Log.d("check---", "isPointInsideResizeHandle: inLeft  $inLeft \n(${point.x} > ${bottomLeft.x}) ")
     val inTop = point.y > topRight.y
-    Log.d("check---", "isPointInsideResizeHandle: inTop $inTop \n (${point.y} > ${topRight.y}) ")
     val inRight = point.x < topRight.x
-    Log.d(
-        "check---",
-        "isPointInsideResizeHandle: inRight $inRight \n (${point.x} > ${topRight.x}) "
-    )
     val inBottom = point.y < bottomLeft.y
-    Log.d(
-        "check---",
-        "isPointInsideResizeHandle: inBottom $inBottom \n (${point.y} > ${bottomLeft.y}) "
-    )
 
     return inLeft && inTop && inRight && inBottom
-//    return point.x in topLeft.x..bottomRight.x && point.y in topLeft.y..bottomRight.y
 }

@@ -4,6 +4,7 @@ import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.Matrix
 import android.graphics.Paint
+import android.graphics.Path
 import android.graphics.Rect
 import android.os.Bundle
 import android.util.Log
@@ -65,7 +66,6 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.advmeds.drawapp.ui.theme.DrawAppTheme
-import kotlinx.coroutines.delay
 import android.graphics.Canvas as AndroidCanvas
 import android.graphics.Color as AndroidColor
 
@@ -556,7 +556,11 @@ class MainActivity : ComponentActivity() {
     ) {
 //        val lines = remember { mutableStateListOf<Line>() }
 
+        var initialDragPosition = remember { mutableStateOf(Offset.Zero) }
         var initialSize = remember { mutableStateOf(Offset.Zero) }
+        var isResizing = remember { mutableStateOf(false) }
+        var currentResizeCorner = remember { mutableStateOf<Corner?>(null) }
+        val currentDragPosition = remember { mutableStateOf(Offset.Zero) }
 
         var textPosition by remember { mutableStateOf(Offset.Zero) }
 
@@ -568,16 +572,11 @@ class MainActivity : ComponentActivity() {
             mutableStateListOf<DrawText>()
         }
 
-        var touchIndex by remember {
-            mutableStateOf(-1)
-        }
-
         val density = LocalDensity.current
 
         LaunchedEffect(selectTool.value) {
             if (selectTool.value == null) {
                 currentDragText.clear()
-                touchIndex = -1
                 drawBunch.value.forEach { it.isSelected = false }
             }
         }
@@ -619,7 +618,6 @@ class MainActivity : ComponentActivity() {
                                 }
 
                                 if (selectTool.value != null) {
-                                    touchIndex = -1
                                     currentDragText.clear()
 
                                     Log.d("check---", "DrawingScreen: $drawBunch")
@@ -635,29 +633,28 @@ class MainActivity : ComponentActivity() {
                                                 density = density
                                             )
 
-                                            Log.d("check---", "DrawingScreen: $index")
-                                            if (isTouched) {
-                                                touchIndex = index
+
+                                            val corners = isPointInsideResizeHandle(
+                                                point = offset,
+                                                (text as DrawText),
+                                                density
+                                            )
+
+                                            Log.d("check---", "DrawingScreen: $corners")
+                                            if (isTouched || corners != null) {
 
                                                 currentDragText.add(text)
 
                                                 return@detectDragGesturesCustom
                                             }
-
-//                                            if (result
-//                                            ) {
-//                                                text.isSelected = true
-//                                                return@forEach
-//                                            }
                                         }
                                 }
 
                                 Log.d("check---", "DrawingScreen: $offset")
                             },
                             onDragStart = { offset ->
-                                Log.d("check---", "DrawingScreen: Start drawing")
+                                Log.d("check---", "DrawingScreen: Start drawing\n$offset")
 
-                                touchIndex = -1
                                 currentDragText.clear()
 
                                 if (selectTool.value != null) {
@@ -665,29 +662,30 @@ class MainActivity : ComponentActivity() {
 //                                        .filterList { drawObjectType == DrawMode.Text }
                                         .asReversed()
                                         .forEachIndexed { index, text ->
+                                            val corner = isPointInsideResizeHandle(
+                                                offset,
+                                                (text as DrawText),
+                                                density = density
 
+                                            )
                                             val isTouched = isPointInsideText(
                                                 offset,
                                                 (text as DrawText),
                                                 density = density
                                             )
-
-                                            Log.d("check---", "DrawingScreen: $isTouched")
-                                            if (isTouched) {
-                                                touchIndex = index
-
+                                            Log.d("check---", "DrawingScreen: $corner")
+                                            if (corner != null) {
+                                                currentDragText.add(text)
+                                                initialDragPosition.value = offset
+                                                initialSize.value = getTextSize(text, density)
+                                                isResizing.value = true
+                                                currentResizeCorner.value = corner
+                                            } else if (isTouched) {
                                                 currentDragText.add(text)
 
                                                 return@detectDragGesturesCustom
                                             }
-
-//                                            if (result
-//                                            ) {
-//                                                text.isSelected = true
-//                                                return@forEach
-//                                            }
                                         }
-
                                 }
 
 //                                Log.d("check---", "DrawingScreen: $drawBunch")
@@ -730,6 +728,8 @@ class MainActivity : ComponentActivity() {
                                     }
 
                                     drawBunch.value = tempDrawBunch
+                                    isResizing.value = false
+                                    currentResizeCorner.value = null
                                 }
 
                                 if (currentSize.value != null) {
@@ -746,17 +746,21 @@ class MainActivity : ComponentActivity() {
                                 Log.d("check---", "DrawingScreen: Start cancel")
 
                                 if (selectTool.value != null) {
-                                    val tempDrawBunch = drawBunch.value
-                                        .reversed()
-                                        .toMutableList()
+                                    val tempDrawBunch = drawBunch.value.toMutableList()
 
-                                    currentDragText.forEach {
-                                        val index = drawBunch.value.indexOf(it)
+                                    currentDragText.forEach { dragged ->
 
-                                        tempDrawBunch[index] = it
+                                        val item = drawBunch.value.find { dragged.id == it.id }
+                                        val index = drawBunch.value.indexOf(item)
+
+                                        if (index > -1) {
+                                            tempDrawBunch[index] = dragged
+                                        }
                                     }
 
-                                    drawBunch.value = tempDrawBunch.reversed()
+                                    drawBunch.value = tempDrawBunch
+                                    isResizing.value = false
+                                    currentResizeCorner.value = null
                                 }
 
                                 if (currentSize.value != null) {
@@ -769,19 +773,82 @@ class MainActivity : ComponentActivity() {
                                 }
                             },
                             onDrag = { change, dragAmount ->
-                                change.consume()
 
+                                currentDragPosition.value = change.position
+                                change.consume()
                                 if (selectTool.value != null) {
 
                                     val newList = mutableListOf<DrawText>()
 
                                     currentDragText.forEach {
 
-                                        val dragText = it.copy(
-                                            position = it.position + dragAmount
-                                        )
 
-                                        newList.add(dragText)
+                                        if (isResizing.value) {
+
+                                            val (textWidth, textHeight) = getTextWidthAndHeight(
+                                                it,
+                                                density
+                                            )
+
+
+                                            val scaleX = when (currentResizeCorner.value) {
+                                                Corner.TopLeft, Corner.BottomLeft -> (((change.position.x - textWidth) - it.position.x) * -1) / ((initialDragPosition.value.x + textWidth) - it.position.x)
+                                                Corner.TopRight, Corner.BottomRight -> (change.position.x - it.position.x) / (initialDragPosition.value.x - it.position.x)
+                                                null -> 1f
+                                            }
+                                            val scaleY = when (currentResizeCorner.value) {
+                                                Corner.TopLeft,
+                                                Corner.TopRight -> (change.position.y - it.position.y) / (initialDragPosition.value.y - it.position.y)
+
+                                                Corner.BottomRight, Corner.BottomLeft -> (((change.position.y + textHeight) - it.position.y)) / ((initialDragPosition.value.y + textHeight) - it.position.y)
+                                                null -> 1f
+                                            }
+
+
+                                            // Set pivotPoint as opposite corner
+                                            val pivotPoint = when (currentResizeCorner.value) {
+                                                Corner.TopLeft -> Offset(
+                                                    it.position.x + textWidth,
+                                                    it.position.y
+                                                )
+
+                                                Corner.TopRight -> Offset(
+                                                    it.position.x,
+                                                    it.position.y
+                                                )
+
+                                                Corner.BottomRight -> Offset(
+                                                    it.position.x,
+                                                    it.position.y - textHeight
+                                                )
+
+                                                Corner.BottomLeft -> Offset(
+                                                    it.position.x + textWidth,
+                                                    it.position.y - textHeight
+                                                )
+
+                                                null -> Offset(
+                                                    it.position.x,
+                                                    it.position.y
+                                                )
+                                            }
+//
+                                            val dragText = it
+
+                                            dragText.transformMatrix.setScale(
+                                                scaleX, scaleY,
+                                                pivotPoint.x,
+                                                pivotPoint.y
+                                            )
+
+                                            newList.add(dragText)
+                                        } else {
+                                            val dragText = it.copy(
+                                                position = it.position + dragAmount
+                                            )
+
+                                            newList.add(dragText)
+                                        }
                                     }
 
                                     currentDragText.clear()
@@ -852,15 +919,43 @@ class MainActivity : ComponentActivity() {
                         DrawMode.Text -> {
                             val textObject = (bunch as DrawText)
 
-                            drawContext.canvas.nativeCanvas.drawText(
-                                textObject.text,
-                                textObject.position.x,
-                                textObject.position.y,
-                                Paint().apply {
+//                            drawContext.canvas.nativeCanvas.drawText(
+//                                textObject.text,
+//                                textObject.position.x,
+//                                textObject.position.y,
+//                                Paint().apply {
+//                                    color = textObject.color.toArgb()
+//                                    textSize = textObject.fontSize.sp.toPx()
+//                                }
+//                            )
+
+
+                            drawIntoCanvas { canvas ->
+                                val paint = Paint().apply {
                                     color = textObject.color.toArgb()
                                     textSize = textObject.fontSize.sp.toPx()
                                 }
-                            )
+                                val textBounds = Rect()
+
+                                paint.getTextBounds(
+                                    textObject.text,
+                                    0,
+                                    textObject.text.length,
+                                    textBounds
+                                )
+
+                                canvas.save()
+                                canvas.nativeCanvas.concat(textObject.transformMatrix)
+
+                                canvas.nativeCanvas.drawText(
+                                    textObject.text,
+                                    textObject.position.x,
+                                    textObject.position.y,
+                                    paint
+                                )
+
+                                canvas.nativeCanvas.restore()
+                            }
 
 //                            drawIntoCanvas {
 //                                val paint = Paint().apply {
@@ -947,9 +1042,9 @@ class MainActivity : ComponentActivity() {
                         )
                         val textWidth = paint.measureText(dragText.text)
                         val textHeight = textBounds.height()
-//
-//                        canvas.save()
-//                        canvas.nativeCanvas.concat(transformationMatrix)
+
+                        canvas.save()
+                        canvas.nativeCanvas.concat(dragText.transformMatrix)
 
                         canvas.nativeCanvas.drawText(
                             dragText.text,
@@ -958,21 +1053,55 @@ class MainActivity : ComponentActivity() {
                             paint
                         )
 
-
-//                        canvas.restore()
-
                         val boundsPosition = Offset(
                             x = dragText.position.x,
                             y = dragText.position.y - textHeight
                         )
 //                        if (dragText.isSelected) {
-                        drawResizeHandles(
-                            canvas = canvas.nativeCanvas,
-                            position = boundsPosition,
-                            size = Offset(textWidth, textHeight.toFloat()),
-                            resizeHandleSize = 20.dp,
+
+                        val topLeft = boundsPosition
+                        val topRight = Offset(boundsPosition.x + textWidth, boundsPosition.y)
+                        val bottomRight = Offset(
+                            boundsPosition.x + textWidth,
+                            boundsPosition.y + textHeight.toFloat()
                         )
+                        val bottomLeft =
+                            Offset(boundsPosition.x, boundsPosition.y + textHeight.toFloat())
+
+                        drawRectangleByOffsets(
+                            canvas.nativeCanvas,
+                            topLeft,
+                            topRight,
+                            bottomRight,
+                            bottomLeft,
+                            paint
+                        )
+
+//                        drawBoundingBox(
+//                            canvas = canvas.nativeCanvas,
+//                            position = boundsPosition,
+//                            size = Offset(textWidth, textHeight.toFloat()),
+//                        )
+
 //                        }
+
+                        canvas.nativeCanvas.restore()
+
+                        if (!isResizing.value) {
+//                            drawResizeHandles(
+//                                canvas = canvas.nativeCanvas,
+//                                position = boundsPosition,
+//                                size = Offset(textWidth, textHeight.toFloat()),
+//                                resizeHandleSize = 20.dp,
+//                            )
+
+                            drawResizeHandles(
+                                canvas = canvas.nativeCanvas,
+                                position = boundsPosition,
+                                size = Offset(textWidth, textHeight.toFloat()),
+                                resizeHandleSize = 20.dp,
+                            )
+                        }
                     }
                 }
 
@@ -1027,13 +1156,15 @@ class MainActivity : ComponentActivity() {
 
                     paint.color = textObject.color.toArgb()
                     paint.textSize = with(density) { textObject.fontSize.sp.toPx() }
-
+                    canvas.save()
+                    canvas.concat(textObject.transformMatrix)
                     canvas.drawText(
                         textObject.text,
                         textObject.position.x,
                         textObject.position.y,
                         paint
                     )
+                    canvas.restore()
                 }
 
                 DrawMode.Line -> {
@@ -1121,6 +1252,40 @@ class MainActivity : ComponentActivity() {
     }
 }
 
+fun drawBoundingBox(
+    canvas: android.graphics.Canvas,
+    position: Offset,
+    size: Offset
+) {
+    val paint = Paint().apply {
+        color = android.graphics.Color.BLACK
+        style = Paint.Style.STROKE
+        strokeWidth = 2f
+    }
+
+    canvas.drawRect(
+        position.x,
+        position.y,
+        position.x + size.x,
+        position.y + size.y,
+        paint
+    )
+}
+
+fun drawRectangleByOffsets(
+    canvas: android.graphics.Canvas,
+    topLeft: Offset,
+    topRight: Offset,
+    bottomRight: Offset,
+    bottomLeft: Offset,
+    paint: Paint
+) {
+    canvas.drawLine(topLeft.x, topLeft.y, topRight.x, topRight.y, paint)
+    canvas.drawLine(topRight.x, topRight.y, bottomRight.x, bottomRight.y, paint)
+    canvas.drawLine(bottomRight.x, bottomRight.y, bottomLeft.x, bottomLeft.y, paint)
+    canvas.drawLine(bottomLeft.x, bottomLeft.y, topLeft.x, topLeft.y, paint)
+}
+
 
 enum class DrawMode {
     Text,
@@ -1150,6 +1315,7 @@ data class DrawText(
     val color: Color,
     var position: Offset,
     val fontSize: Int,
+    var transformMatrix: Matrix = Matrix()
 ) : DrawObject
 
 data class DrawClear(
@@ -1216,3 +1382,23 @@ fun DialogContent(onDismiss: () -> Unit, onSubmit: (String) -> Unit) {
     }
 }
 
+fun getTextSize(textItem: DrawText, density: Density): Offset {
+    val paint = Paint().apply {
+        textSize = with(density) { textItem.fontSize.dp.toPx() }
+    }
+    val textBounds = Rect()
+    paint.getTextBounds(textItem.text, 0, textItem.text.length, textBounds)
+    val textWidth = paint.measureText(textItem.text)
+    val textHeight = textBounds.height().toFloat()
+
+    return Offset(textWidth, textHeight)
+}
+
+fun linesToPath(lines: List<Line>): Path {
+    val path = Path()
+    lines.forEach { line ->
+        path.moveTo(line.start.x, line.start.y)
+        path.lineTo(line.end.x, line.end.y)
+    }
+    return path
+}
