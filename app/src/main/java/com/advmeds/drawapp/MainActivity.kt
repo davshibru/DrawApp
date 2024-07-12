@@ -48,14 +48,17 @@ import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshots.SnapshotStateList
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.NativeCanvas
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.input.pointer.pointerInput
@@ -73,6 +76,7 @@ import android.graphics.Color as AndroidColor
 typealias DrawBunch = List<DrawObject>
 
 class MainActivity : ComponentActivity() {
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContent {
@@ -539,7 +543,6 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-
     @Composable
     private fun DrawingScreen(
         image: ImageBitmap,
@@ -556,11 +559,12 @@ class MainActivity : ComponentActivity() {
     ) {
 //        val lines = remember { mutableStateListOf<Line>() }
 
-        var initialDragPosition = remember { mutableStateOf(Offset.Zero) }
-        var initialSize = remember { mutableStateOf(Offset.Zero) }
-        var isResizing = remember { mutableStateOf(false) }
-        var currentResizeCorner = remember { mutableStateOf<Corner?>(null) }
+        val initialDragPosition = remember { mutableStateOf(Offset.Zero) }
+        val initialSize = remember { mutableStateOf(Offset.Zero) }
+        val isResizing = remember { mutableStateOf(false) }
+        val currentResizeCorner = remember { mutableStateOf<Corner?>(null) }
         val currentDragPosition = remember { mutableStateOf(Offset.Zero) }
+//        val selectRectangle = remember { mutableStateOf<CustomRect?>(null) }
 
         var textPosition by remember { mutableStateOf(Offset.Zero) }
 
@@ -618,6 +622,7 @@ class MainActivity : ComponentActivity() {
                                 }
 
                                 if (selectTool.value != null) {
+//                                    selectRectangle.value = null
                                     currentDragText.clear()
 
                                     Log.d("check---", "DrawingScreen: $drawBunch")
@@ -643,7 +648,21 @@ class MainActivity : ComponentActivity() {
                                             Log.d("check---", "DrawingScreen: $corners")
                                             if (isTouched || corners != null) {
 
+                                                val (textWidth, textHeight) = getTextWidthAndHeight(
+                                                    (drawBunch.value[index] as DrawText),
+                                                    density
+                                                )
+
+                                                val topRight = Offset(
+                                                    text.position.x + textWidth,
+                                                    text.position.y - textHeight
+                                                )
+
                                                 currentDragText.add(text)
+//                                                selectRectangle.value =
+//                                                    CustomRect(
+//                                                        text.position, topRight
+//                                                    )
 
                                                 return@detectDragGesturesCustom
                                             }
@@ -658,6 +677,7 @@ class MainActivity : ComponentActivity() {
                                 currentDragText.clear()
 
                                 if (selectTool.value != null) {
+//                                    selectRectangle.value = null
                                     drawBunch.value
 //                                        .filterList { drawObjectType == DrawMode.Text }
                                         .asReversed()
@@ -680,6 +700,20 @@ class MainActivity : ComponentActivity() {
                                                 initialSize.value = getTextSize(text, density)
                                                 isResizing.value = true
                                                 currentResizeCorner.value = corner
+
+                                                val (textWidth, textHeight) = getTextWidthAndHeight(
+                                                    (drawBunch.value[index] as DrawText),
+                                                    density
+                                                )
+
+                                                val topRight = Offset(
+                                                    text.position.x + textWidth,
+                                                    text.position.y - textHeight
+                                                )
+
+//                                                selectRectangle.value = CustomRect(
+//                                                    text.position, topRight
+//                                                )
                                             } else if (isTouched) {
                                                 currentDragText.add(text)
 
@@ -717,19 +751,124 @@ class MainActivity : ComponentActivity() {
                                 if (selectTool.value != null) {
                                     val tempDrawBunch = drawBunch.value.toMutableList()
 
+                                    Log.d(
+                                        "check---",
+                                        "DrawingScreen: ${currentDragText.toList()}"
+                                    )
+
                                     currentDragText.forEach { dragged ->
 
                                         val item = drawBunch.value.find { dragged.id == it.id }
                                         val index = drawBunch.value.indexOf(item)
 
-                                        if (index > -1) {
-                                            tempDrawBunch[index] = dragged
-                                        }
-                                    }
+                                        Log.d(
+                                            "check---",
+                                            "DrawingScreen: $index"
+                                        )
 
-                                    drawBunch.value = tempDrawBunch
-                                    isResizing.value = false
-                                    currentResizeCorner.value = null
+                                        if (index > -1) {
+
+//                                            Log.d(
+//                                                "check---",
+//                                                "DrawingScreen: ${selectRectangle.value}"
+//                                            )
+
+                                            if (true) {
+//                                            selectRectangle.value?.let { scale ->
+//                                                val (textWidth, textHeight) = getTextWidthAndHeight(
+//                                                    (drawBunch.value[index] as DrawText),
+//                                                    density
+//                                                )
+//
+//                                                Log.d(
+//                                                    "check---",
+//                                                    "DrawingScreen: $textWidth $textHeight"
+//                                                )
+//
+//                                                val newPosition: Offset = getNewPosition(
+//                                                    (drawBunch.value[index] as DrawText),
+//                                                    density
+//                                                )
+//
+//                                                Log.d(
+//                                                    "check---",
+//                                                    "DrawingScreen: ${currentResizeCorner.value}"
+//                                                )
+//
+//                                                val scaleX = when (currentResizeCorner.value) {
+//                                                    Corner.TopLeft -> (((scale.topLeft.x - textWidth) - dragged.position.x) * -1) / ((initialDragPosition.value.x + textWidth) - dragged.position.x)
+//                                                    Corner.BottomLeft -> (((scale.bottomLeft.x - textWidth) - dragged.position.x) * -1) / ((initialDragPosition.value.x + textWidth) - dragged.position.x)
+//                                                    Corner.TopRight -> (scale.topRight.x - dragged.position.x) / (initialDragPosition.value.x - dragged.position.x)
+//                                                    Corner.BottomRight -> (scale.bottomRight.x - dragged.position.x) / (initialDragPosition.value.x - dragged.position.x)
+//                                                    null -> 1f
+//                                                }
+//
+//                                                Log.d(
+//                                                    "check---",
+//                                                    "DrawingScreen: \n" +
+//                                                            "scale.topLeft.x             - ${scale.topLeft.x}\n" +
+//                                                            "textWidth                   - ${textWidth}\n" +
+//                                                            "dragged.position.x          - ${dragged.position.x}\n" +
+//                                                            "initialDragPosition.value.x - ${initialDragPosition.value.x}\n" +
+//                                                            "scaleX                      - $scaleX\n" +
+//                                                            ""
+//                                                )
+//
+//                                                val scaleY = when (currentResizeCorner.value) {
+//                                                    Corner.TopLeft -> (scale.topLeft.y - dragged.position.y) / (initialDragPosition.value.y - dragged.position.y)
+//                                                    Corner.TopRight -> (scale.topRight.y - dragged.position.y) / (initialDragPosition.value.y - dragged.position.y)
+//                                                    Corner.BottomRight -> (((scale.bottomRight.y + textHeight) - dragged.position.y)) / ((initialDragPosition.value.y + textHeight) - dragged.position.y)
+//                                                    Corner.BottomLeft -> (((scale.bottomLeft.y + textHeight) - dragged.position.y)) / ((initialDragPosition.value.y + textHeight) - dragged.position.y)
+//
+//                                                    null -> 1f
+//                                                }
+//
+//
+//                                                // Set pivotPoint as opposite corner
+//                                                val pivotPoint = when (currentResizeCorner.value) {
+//                                                    Corner.TopLeft -> Offset(
+//                                                        dragged.position.x + textWidth,
+//                                                        dragged.position.y
+//                                                    )
+//
+//                                                    Corner.TopRight -> Offset(
+//                                                        dragged.position.x,
+//                                                        dragged.position.y
+//                                                    )
+//
+//                                                    Corner.BottomRight -> Offset(
+//                                                        dragged.position.x,
+//                                                        dragged.position.y - textHeight
+//                                                    )
+//
+//                                                    Corner.BottomLeft -> Offset(
+//                                                        dragged.position.x + textWidth,
+//                                                        dragged.position.y - textHeight
+//                                                    )
+//
+//                                                    null -> Offset(
+//                                                        dragged.position.x,
+//                                                        dragged.position.y
+//                                                    )
+//                                                }
+//                                                dragged.transformMatrix = scale.matrix
+////                                                    .setScale(
+////                                                        scaleX, scaleY,
+////                                                        textWidth / 2f + dragged.position.x,
+////                                                        textHeight / 2f + +dragged.position.y
+////                                                    )
+//
+//                                            }
+                                            }
+
+                                            tempDrawBunch[index] = dragged
+
+                                        }
+
+                                        drawBunch.value = tempDrawBunch
+                                        isResizing.value = false
+                                        currentResizeCorner.value = null
+                                    }
                                 }
 
                                 if (currentSize.value != null) {
@@ -780,27 +919,163 @@ class MainActivity : ComponentActivity() {
 
                                     val newList = mutableListOf<DrawText>()
 
-                                    currentDragText.forEach {
+                                    if (true) {
+//                                    if (isResizing.value && currentResizeCorner.value != null) {
+//                                        val rectangle = selectRectangle.value!!
+//
+//                                        selectRectangle.value =
+//                                            when (currentResizeCorner.value) {
+//
+//                                                Corner.TopLeft ->
+//                                                    rectangle.apply {
+//                                                        moveTopLeft(
+//                                                            Offset(
+//                                                                topLeft.x + dragAmount.x,
+//                                                                topLeft.y + dragAmount.y
+//                                                            )
+//                                                        )
+//                                                        updateMatrix()
+//                                                    }
+//
+//                                                Corner.TopRight -> rectangle.apply {
+//                                                    moveTopRight(
+//                                                        Offset(
+//                                                            topRight.x + dragAmount.x,
+//                                                            topRight.y + dragAmount.y
+//                                                        )
+//                                                    )
+//                                                    updateMatrix()
+//                                                }
+//
+//                                                Corner.BottomRight -> rectangle.apply {
+//                                                    moveBottomRight(
+//                                                        Offset(
+//                                                            bottomRight.x + dragAmount.x,
+//                                                            bottomRight.y + dragAmount.y
+//                                                        )
+//                                                    )
+//                                                    updateMatrix()
+//                                                }
+//
+//                                                Corner.BottomLeft -> rectangle.apply {
+//                                                    moveBottomLeft(
+//                                                        Offset(
+//                                                            bottomLeft.x + dragAmount.x,
+//                                                            bottomLeft.y + dragAmount.y
+//                                                        )
+//                                                    )
+//                                                    updateMatrix()
+//                                                }
+//
+//
+////                                                Corner.TopLeft -> {
+////                                                    rectangle.copy(
+////                                                        topLeft = Offset(
+////                                                            rectangle.topLeft.x + dragAmount.x,
+////                                                            rectangle.topLeft.y + dragAmount.y
+////                                                        ),
+////                                                        topRight = Offset(
+////                                                            rectangle.topRight.x,
+////                                                            rectangle.topLeft.y + dragAmount.y
+////                                                        ),
+////                                                        bottomLeft = Offset(
+////                                                            rectangle.topLeft.x + dragAmount.x,
+////                                                            rectangle.bottomLeft.y
+////                                                        )
+////                                                    )
+////                                                }
+////
+////                                                Corner.TopRight -> {
+////                                                    rectangle.copy(
+////                                                        topRight = Offset(
+////                                                            rectangle.topRight.x + dragAmount.x,
+////                                                            rectangle.topRight.y + dragAmount.y
+////                                                        ),
+////                                                        topLeft = Offset(
+////                                                            rectangle.topLeft.x,
+////                                                            rectangle.topRight.y + dragAmount.y
+////                                                        ),
+////                                                        bottomRight = Offset(
+////                                                            rectangle.topRight.x + dragAmount.x,
+////                                                            rectangle.bottomRight.y
+////                                                        )
+////                                                    )
+////                                                }
+////
+////                                                Corner.BottomRight -> {
+////                                                    rectangle.copy(
+////                                                        bottomRight = Offset(
+////                                                            rectangle.bottomRight.x + dragAmount.x,
+////                                                            rectangle.bottomRight.y + dragAmount.y
+////                                                        ),
+////                                                        topRight = Offset(
+////                                                            rectangle.bottomRight.x + dragAmount.x,
+////                                                            rectangle.topRight.y
+////                                                        ),
+////                                                        bottomLeft = Offset(
+////                                                            rectangle.bottomLeft.x,
+////                                                            rectangle.bottomRight.y + dragAmount.y
+////                                                        )
+////                                                    )
+////                                                }
+////
+////                                                Corner.BottomLeft -> {
+////                                                    rectangle.copy(
+////                                                        bottomLeft = Offset(
+////                                                            rectangle.bottomLeft.x + dragAmount.x,
+////                                                            rectangle.bottomLeft.y + dragAmount.y
+////                                                        ),
+////                                                        topLeft = Offset(
+////                                                            rectangle.bottomLeft.x + dragAmount.x,
+////                                                            rectangle.topLeft.y
+////                                                        ),
+////                                                        bottomRight = Offset(
+////                                                            rectangle.bottomRight.x,
+////                                                            rectangle.bottomLeft.y + dragAmount.y
+////                                                        )
+////                                                    )
+////                                                }
+//
+//                                                null -> rectangle
+//                                            }
+//                                    }
+                                    }
 
+
+                                    currentDragText.forEach {
 
                                         if (isResizing.value) {
 
+                                            val item =
+                                                drawBunch.value.find { static -> it.id == static.id }
+                                            val index = drawBunch.value.indexOf(item)
+
                                             val (textWidth, textHeight) = getTextWidthAndHeight(
-                                                it,
+                                                (drawBunch.value[index] as DrawText),
                                                 density
                                             )
 
+                                            Log.d(
+                                                "check---",
+                                                "DrawingScreen: $textWidth $textHeight"
+                                            )
+
+                                            val newPosition: Offset = getNewPosition(
+                                                (drawBunch.value[index] as DrawText),
+                                                density
+                                            )
 
                                             val scaleX = when (currentResizeCorner.value) {
-                                                Corner.TopLeft, Corner.BottomLeft -> (((change.position.x - textWidth) - it.position.x) * -1) / ((initialDragPosition.value.x + textWidth) - it.position.x)
+                                                Corner.TopLeft, Corner.BottomLeft -> (((change.position.x - textWidth) - newPosition.x) * -1) / ((initialDragPosition.value.x + textWidth) - newPosition.x)
                                                 Corner.TopRight, Corner.BottomRight -> (change.position.x - it.position.x) / (initialDragPosition.value.x - it.position.x)
                                                 null -> 1f
                                             }
                                             val scaleY = when (currentResizeCorner.value) {
-                                                Corner.TopLeft,
+                                                Corner.TopLeft -> (change.position.y - newPosition.y) / (initialDragPosition.value.y - newPosition.y)
                                                 Corner.TopRight -> (change.position.y - it.position.y) / (initialDragPosition.value.y - it.position.y)
+                                                Corner.BottomRight,
+                                                Corner.BottomLeft -> (((change.position.y + textHeight) - it.position.y)) / ((initialDragPosition.value.y + textHeight) - it.position.y)
 
-                                                Corner.BottomRight, Corner.BottomLeft -> (((change.position.y + textHeight) - it.position.y)) / ((initialDragPosition.value.y + textHeight) - it.position.y)
                                                 null -> 1f
                                             }
 
@@ -832,7 +1107,7 @@ class MainActivity : ComponentActivity() {
                                                     it.position.y
                                                 )
                                             }
-//
+
                                             val dragText = it
 
                                             dragText.transformMatrix.setScale(
@@ -906,204 +1181,13 @@ class MainActivity : ComponentActivity() {
                         )
                     }
             ) {
-                drawImage(image)
+                DrawCanvas(image, drawBunch, currentDragText, currentLine, isResizing)
 
-                drawBunch.value.forEachIndexed { index, bunch ->
-
-                    if (currentDragText.map { it.id }.contains(bunch.id)) {
-                        return@forEachIndexed
-                    }
-
-
-                    when (bunch.drawObjectType) {
-                        DrawMode.Text -> {
-                            val textObject = (bunch as DrawText)
-
-//                            drawContext.canvas.nativeCanvas.drawText(
-//                                textObject.text,
-//                                textObject.position.x,
-//                                textObject.position.y,
-//                                Paint().apply {
-//                                    color = textObject.color.toArgb()
-//                                    textSize = textObject.fontSize.sp.toPx()
-//                                }
-//                            )
-
-
-                            drawIntoCanvas { canvas ->
-                                val paint = Paint().apply {
-                                    color = textObject.color.toArgb()
-                                    textSize = textObject.fontSize.sp.toPx()
-                                }
-                                val textBounds = Rect()
-
-                                paint.getTextBounds(
-                                    textObject.text,
-                                    0,
-                                    textObject.text.length,
-                                    textBounds
-                                )
-
-                                canvas.save()
-                                canvas.nativeCanvas.concat(textObject.transformMatrix)
-
-                                canvas.nativeCanvas.drawText(
-                                    textObject.text,
-                                    textObject.position.x,
-                                    textObject.position.y,
-                                    paint
-                                )
-
-                                canvas.nativeCanvas.restore()
-                            }
-
-//                            drawIntoCanvas {
-//                                val paint = Paint().apply {
-//                                    color = textObject.color.toArgb()
-//                                    textSize = textObject.fontSize.sp.toPx()
-//                                }
+//                selectRectangle.value?.let {
 //
-//                                val textBounds = Rect()
-//                                paint.getTextBounds(
-//                                    textObject.text,
-//                                    0,
-//                                    textObject.text.length,
-//                                    textBounds
-//                                )
-//                                val textWidth = paint.measureText(textObject.text)
-//                                val textHeight = textBounds.height()
-//
-//                                it.nativeCanvas.drawText(
-//                                    textObject.text,
-//                                    textObject.position.x,
-//                                    textObject.position.y,
-//                                    paint
-//                                )
-//
-//                                if (textObject.isSelected) {
-//                                    drawResizeHandles(
-//                                        canvas = it.nativeCanvas,
-//                                        position = textObject.position,
-//                                        size = Offset(textWidth, textHeight.toFloat()),
-//                                        resizeHandleSize = 20.dp,
-//                                    )
-//                                }
-//                            }
-                        }
+//                    DrawRectangleByLines(it)
+//                }
 
-                        DrawMode.Line -> {
-                            (bunch as DrawLine).list.forEach { line ->
-                                drawLine(
-                                    color = line.color,
-                                    start = line.start,
-                                    end = line.end,
-                                    strokeWidth = line.strokeWidth.toPx(),
-                                    cap = StrokeCap.Round
-                                )
-                            }
-                        }
-
-                        DrawMode.Select, DrawMode.Clear -> {}
-                    }
-                }
-
-                currentLine.forEach { line ->
-                    drawLine(
-                        color = line.color,
-                        start = line.start,
-                        end = line.end,
-                        strokeWidth = line.strokeWidth.toPx(),
-                        cap = StrokeCap.Round
-                    )
-                }
-
-                currentDragText.forEach { dragText ->
-//                    drawContext.canvas.nativeCanvas.drawText(
-//                        dragText.text,
-//                        dragText.position.x,
-//                        dragText.position.y,
-//                        Paint().apply {
-//                            color = dragText.color.toArgb()
-//                            textSize = dragText.fontSize.sp.toPx()
-//                        }
-//                    )
-
-                    drawIntoCanvas { canvas ->
-                        val paint = Paint().apply {
-                            color = dragText.color.toArgb()
-                            textSize = dragText.fontSize.sp.toPx()
-                        }
-                        val textBounds = Rect()
-                        paint.getTextBounds(
-                            dragText.text,
-                            0,
-                            dragText.text.length,
-                            textBounds
-                        )
-                        val textWidth = paint.measureText(dragText.text)
-                        val textHeight = textBounds.height()
-
-                        canvas.save()
-                        canvas.nativeCanvas.concat(dragText.transformMatrix)
-
-                        canvas.nativeCanvas.drawText(
-                            dragText.text,
-                            dragText.position.x,
-                            dragText.position.y,
-                            paint
-                        )
-
-                        val boundsPosition = Offset(
-                            x = dragText.position.x,
-                            y = dragText.position.y - textHeight
-                        )
-//                        if (dragText.isSelected) {
-
-                        val topLeft = boundsPosition
-                        val topRight = Offset(boundsPosition.x + textWidth, boundsPosition.y)
-                        val bottomRight = Offset(
-                            boundsPosition.x + textWidth,
-                            boundsPosition.y + textHeight.toFloat()
-                        )
-                        val bottomLeft =
-                            Offset(boundsPosition.x, boundsPosition.y + textHeight.toFloat())
-
-                        drawRectangleByOffsets(
-                            canvas.nativeCanvas,
-                            topLeft,
-                            topRight,
-                            bottomRight,
-                            bottomLeft,
-                            paint
-                        )
-
-//                        drawBoundingBox(
-//                            canvas = canvas.nativeCanvas,
-//                            position = boundsPosition,
-//                            size = Offset(textWidth, textHeight.toFloat()),
-//                        )
-
-//                        }
-
-                        canvas.nativeCanvas.restore()
-
-                        if (!isResizing.value) {
-//                            drawResizeHandles(
-//                                canvas = canvas.nativeCanvas,
-//                                position = boundsPosition,
-//                                size = Offset(textWidth, textHeight.toFloat()),
-//                                resizeHandleSize = 20.dp,
-//                            )
-
-                            drawResizeHandles(
-                                canvas = canvas.nativeCanvas,
-                                position = boundsPosition,
-                                size = Offset(textWidth, textHeight.toFloat()),
-                                resizeHandleSize = 20.dp,
-                            )
-                        }
-                    }
-                }
 
 //                    drawIntoCanvas {
 //                        val paint = Paint().apply {
@@ -1141,6 +1225,270 @@ class MainActivity : ComponentActivity() {
 
             }
         }
+    }
+
+    private fun DrawScope.DrawRectangleByLines(rectangle: CustomRect) {
+        drawLine(Color.Black, rectangle.topLeft, rectangle.topRight)
+        drawLine(Color.Black, rectangle.topRight, rectangle.bottomRight)
+        drawLine(Color.Black, rectangle.bottomRight, rectangle.bottomLeft)
+        drawLine(Color.Black, rectangle.bottomLeft, rectangle.topLeft)
+
+
+        val cornerSize = 20f
+        drawRect(
+            color = Color.Red,
+            topLeft = Offset(
+                rectangle.topLeft.x - cornerSize / 2,
+                rectangle.topLeft.y - cornerSize / 2
+            ),
+            size = androidx.compose.ui.geometry.Size(cornerSize, cornerSize)
+        )
+        drawRect(
+            color = Color.Red,
+            topLeft = Offset(
+                rectangle.topRight.x - cornerSize / 2,
+                rectangle.topRight.y - cornerSize / 2
+            ),
+            size = androidx.compose.ui.geometry.Size(cornerSize, cornerSize)
+        )
+        drawRect(
+            color = Color.Red,
+            topLeft = Offset(
+                rectangle.bottomLeft.x - cornerSize / 2,
+                rectangle.bottomLeft.y - cornerSize / 2
+            ),
+            size = androidx.compose.ui.geometry.Size(cornerSize, cornerSize)
+        )
+        drawRect(
+            color = Color.Red,
+            topLeft = Offset(
+                rectangle.bottomRight.x - cornerSize / 2,
+                rectangle.bottomRight.y - cornerSize / 2
+            ),
+            size = androidx.compose.ui.geometry.Size(cornerSize, cornerSize)
+        )
+    }
+
+
+    private fun DrawScope.DrawCanvas(
+        image: ImageBitmap,
+        drawBunch: MutableState<DrawBunch>,
+        currentDragText: SnapshotStateList<DrawText>,
+        currentLine: SnapshotStateList<Line>,
+        isResizing: MutableState<Boolean>
+    ) {
+        drawImage(image)
+
+        drawBunch.value.forEachIndexed { index, bunch ->
+
+            if (currentDragText.map { it.id }.contains(bunch.id)) {
+                return@forEachIndexed
+            }
+
+
+            when (bunch.drawObjectType) {
+                DrawMode.Text -> {
+                    val textObject = (bunch as DrawText)
+
+                    //                            drawContext.canvas.nativeCanvas.drawText(
+                    //                                textObject.text,
+                    //                                textObject.position.x,
+                    //                                textObject.position.y,
+                    //                                Paint().apply {
+                    //                                    color = textObject.color.toArgb()
+                    //                                    textSize = textObject.fontSize.sp.toPx()
+                    //                                }
+                    //                            )
+
+
+                    drawIntoCanvas { canvas ->
+                        val paint = Paint().apply {
+                            color = textObject.color.toArgb()
+                            textSize = textObject.fontSize.sp.toPx()
+                        }
+                        val textBounds = Rect()
+
+                        paint.getTextBounds(
+                            textObject.text,
+                            0,
+                            textObject.text.length,
+                            textBounds
+                        )
+
+                        canvas.save()
+                        canvas.nativeCanvas.concat(textObject.transformMatrix)
+
+                        canvas.nativeCanvas.drawText(
+                            textObject.text,
+                            textObject.position.x,
+                            textObject.position.y,
+                            paint
+                        )
+
+                        canvas.nativeCanvas.restore()
+                    }
+
+                    //                            drawIntoCanvas {
+                    //                                val paint = Paint().apply {
+                    //                                    color = textObject.color.toArgb()
+                    //                                    textSize = textObject.fontSize.sp.toPx()
+                    //                                }
+                    //
+                    //                                val textBounds = Rect()
+                    //                                paint.getTextBounds(
+                    //                                    textObject.text,
+                    //                                    0,
+                    //                                    textObject.text.length,
+                    //                                    textBounds
+                    //                                )
+                    //                                val textWidth = paint.measureText(textObject.text)
+                    //                                val textHeight = textBounds.height()
+                    //
+                    //                                it.nativeCanvas.drawText(
+                    //                                    textObject.text,
+                    //                                    textObject.position.x,
+                    //                                    textObject.position.y,
+                    //                                    paint
+                    //                                )
+                    //
+                    //                                if (textObject.isSelected) {
+                    //                                    drawResizeHandles(
+                    //                                        canvas = it.nativeCanvas,
+                    //                                        position = textObject.position,
+                    //                                        size = Offset(textWidth, textHeight.toFloat()),
+                    //                                        resizeHandleSize = 20.dp,
+                    //                                    )
+                    //                                }
+                    //                            }
+                }
+
+                DrawMode.Line -> {
+                    (bunch as DrawLine).list.forEach { line ->
+                        drawLine(
+                            color = line.color,
+                            start = line.start,
+                            end = line.end,
+                            strokeWidth = line.strokeWidth.toPx(),
+                            cap = StrokeCap.Round
+                        )
+                    }
+                }
+
+                DrawMode.Select, DrawMode.Clear -> {}
+            }
+        }
+
+        currentLine.forEach { line ->
+            drawLine(
+                color = line.color,
+                start = line.start,
+                end = line.end,
+                strokeWidth = line.strokeWidth.toPx(),
+                cap = StrokeCap.Round
+            )
+        }
+
+        currentDragText.forEach { dragText ->
+            //                    drawContext.canvas.nativeCanvas.drawText(
+            //                        dragText.text,
+            //                        dragText.position.x,
+            //                        dragText.position.y,
+            //                        Paint().apply {
+            //                            color = dragText.color.toArgb()
+            //                            textSize = dragText.fontSize.sp.toPx()
+            //                        }
+            //                    )
+
+            drawIntoCanvas { canvas ->
+                val paint = Paint().apply {
+                    color = dragText.color.toArgb()
+                    textSize = dragText.fontSize.sp.toPx()
+                }
+                val textBounds = Rect()
+                paint.getTextBounds(
+                    dragText.text,
+                    0,
+                    dragText.text.length,
+                    textBounds
+                )
+                val textWidth = paint.measureText(dragText.text)
+                val textHeight = textBounds.height()
+
+                canvas.save()
+                canvas.nativeCanvas.concat(dragText.transformMatrix)
+
+                canvas.nativeCanvas.drawText(
+                    dragText.text,
+                    dragText.position.x,
+                    dragText.position.y,
+                    paint
+                )
+
+                val boundsPosition = Offset(
+                    x = dragText.position.x,
+                    y = dragText.position.y - textHeight
+                )
+//                                        if (dragText.isSelected) {
+
+                val topLeft = boundsPosition
+                val topRight = Offset(boundsPosition.x + textWidth, boundsPosition.y)
+                val bottomRight = Offset(
+                    boundsPosition.x + textWidth,
+                    boundsPosition.y + textHeight.toFloat()
+                )
+                val bottomLeft =
+                    Offset(boundsPosition.x, boundsPosition.y + textHeight.toFloat())
+
+                drawRectangleByOffsets(
+                    canvas.nativeCanvas,
+                    topLeft,
+                    topRight,
+                    bottomRight,
+                    bottomLeft,
+                    paint
+                )
+
+//                                        drawBoundingBox(
+//                                            canvas = canvas.nativeCanvas,
+//                                            position = boundsPosition,
+//                                            size = Offset(textWidth, textHeight.toFloat()),
+//                                        )
+//
+//                                        }
+
+                canvas.nativeCanvas.restore()
+
+                if (!isResizing.value) {
+    //                            drawResizeHandles(
+    //                                canvas = canvas.nativeCanvas,
+    //                                position = boundsPosition,
+    //                                size = Offset(textWidth, textHeight.toFloat()),
+    //                                resizeHandleSize = 20.dp,
+    //                            )
+
+                    drawResizeHandles(
+                        canvas = canvas.nativeCanvas,
+                        position = boundsPosition,
+                        size = Offset(textWidth, textHeight.toFloat()),
+                        resizeHandleSize = 20.dp,
+                    )
+                }
+            }
+        }
+    }
+
+    private fun drawRectangleByOffsets(
+        canvas: android.graphics.Canvas,
+        topLeft: Offset,
+        topRight: Offset,
+        bottomRight: Offset,
+        bottomLeft: Offset,
+        paint: Paint
+    ) {
+        canvas.drawLine(topLeft.x, topLeft.y, topRight.x, topRight.y, paint)
+        canvas.drawLine(topRight.x, topRight.y, bottomRight.x, bottomRight.y, paint)
+        canvas.drawLine(bottomRight.x, bottomRight.y, bottomLeft.x, bottomLeft.y, paint)
+        canvas.drawLine(bottomLeft.x, bottomLeft.y, topLeft.x, topLeft.y, paint)
     }
 
     fun createBitmapFromLines(image: ImageBitmap, drawBunch: DrawBunch, density: Density): Bitmap {
@@ -1250,40 +1598,6 @@ class MainActivity : ComponentActivity() {
             paint
         )
     }
-}
-
-fun drawBoundingBox(
-    canvas: android.graphics.Canvas,
-    position: Offset,
-    size: Offset
-) {
-    val paint = Paint().apply {
-        color = android.graphics.Color.BLACK
-        style = Paint.Style.STROKE
-        strokeWidth = 2f
-    }
-
-    canvas.drawRect(
-        position.x,
-        position.y,
-        position.x + size.x,
-        position.y + size.y,
-        paint
-    )
-}
-
-fun drawRectangleByOffsets(
-    canvas: android.graphics.Canvas,
-    topLeft: Offset,
-    topRight: Offset,
-    bottomRight: Offset,
-    bottomLeft: Offset,
-    paint: Paint
-) {
-    canvas.drawLine(topLeft.x, topLeft.y, topRight.x, topRight.y, paint)
-    canvas.drawLine(topRight.x, topRight.y, bottomRight.x, bottomRight.y, paint)
-    canvas.drawLine(bottomRight.x, bottomRight.y, bottomLeft.x, bottomLeft.y, paint)
-    canvas.drawLine(bottomLeft.x, bottomLeft.y, topLeft.x, topLeft.y, paint)
 }
 
 
@@ -1402,3 +1716,4 @@ fun linesToPath(lines: List<Line>): Path {
     }
     return path
 }
+

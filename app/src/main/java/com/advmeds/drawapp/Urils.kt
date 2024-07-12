@@ -1,7 +1,9 @@
 package com.advmeds.drawapp
 
+import android.graphics.Matrix
 import android.graphics.Paint
 import android.graphics.Rect
+import android.graphics.RectF
 import android.util.Log
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
@@ -313,6 +315,7 @@ private val mouseToTouchSlopRatio = mouseSlop / defaultTouchSlop
 
 
 fun getTextWidthAndHeight(textItem: DrawText, density: Density): Pair<Float, Float> {
+    val position = textItem.position
     val textBounds = Rect()
     val paint = Paint().apply {
         textSize = with(density) { textItem.fontSize.dp.toPx() }
@@ -321,7 +324,29 @@ fun getTextWidthAndHeight(textItem: DrawText, density: Density): Pair<Float, Flo
     val textWidth = paint.measureText(textItem.text)
     val textHeight = textBounds.height()
 
-    return Pair(textWidth, textHeight.toFloat())
+    val topRight = floatArrayOf(position.x + textWidth, position.y - textHeight)
+    val bottomLeft = floatArrayOf(position.x, position.y)
+
+    textItem.transformMatrix.mapPoints(topRight)
+    textItem.transformMatrix.mapPoints(bottomLeft)
+
+    return Pair(abs(topRight[0] -bottomLeft[0]), abs(topRight[1] - bottomLeft[1]))
+}
+
+fun getNewPosition(textItem: DrawText, density: Density): Offset {
+    val position = textItem.position
+
+    val textBounds = Rect()
+    val paint = Paint().apply {
+        textSize = with(density) { textItem.fontSize.dp.toPx() }
+    }
+    paint.getTextBounds(textItem.text, 0, textItem.text.length, textBounds)
+
+    val bottomLeft = floatArrayOf(position.x, position.y)
+
+    textItem.transformMatrix.mapPoints(bottomLeft)
+
+    return Offset(bottomLeft[0], bottomLeft[1])
 }
 
 fun isPointInsideResizeHandle(point: Offset, textItem: DrawText, density: Density): Corner? {
@@ -332,30 +357,76 @@ fun isPointInsideResizeHandle(point: Offset, textItem: DrawText, density: Densit
     }
     paint.getTextBounds(textItem.text, 0, textItem.text.length, textBounds)
     val textWidth = paint.measureText(textItem.text)
-    val textHeight = textBounds.height()
+    val textHeight = textBounds.height().toFloat()
 
-    val topLeft = Offset(position.x, position.y - textHeight)
-    val topRight = Offset(position.x + textWidth, position.y - textHeight)
-    val bottomRight = Offset(position.x + textWidth, position.y)
-    val bottomLeft = Offset(position.x, position.y)
+    val topLeft = floatArrayOf(position.x, position.y - textHeight)
+    val topRight = floatArrayOf(position.x + textWidth, position.y - textHeight)
+    val bottomRight = floatArrayOf(position.x + textWidth, position.y)
+    val bottomLeft = floatArrayOf(position.x, position.y)
+
+    // Apply the transformation matrix
+    textItem.transformMatrix.mapPoints(topLeft)
+    textItem.transformMatrix.mapPoints(topRight)
+    textItem.transformMatrix.mapPoints(bottomRight)
+    textItem.transformMatrix.mapPoints(bottomLeft)
 
     val radius = 20
 
-    if (topLeft.minus(point).getDistanceSquared() < radius * radius) {
+    if (Offset(topLeft[0], topLeft[1]).minus(point).getDistanceSquared() < radius * radius) {
         return Corner.TopLeft
     }
-    if (topRight.minus(point).getDistanceSquared() < radius * radius) {
+    if (Offset(topRight[0], topRight[1]).minus(point).getDistanceSquared() < radius * radius) {
         return Corner.TopRight
     }
-    if (bottomRight.minus(point).getDistanceSquared() < radius * radius) {
+    if (Offset(bottomRight[0], bottomRight[1]).minus(point).getDistanceSquared() < radius * radius) {
         return Corner.BottomRight
     }
-    if (bottomLeft.minus(point).getDistanceSquared() < radius * radius) {
+    if (Offset(bottomLeft[0], bottomLeft[1]).minus(point).getDistanceSquared() < radius * radius) {
         return Corner.BottomLeft
     }
 
     return null
 }
+
+// Helper function to calculate distance squared between two points
+fun Offset.getDistanceSquared(): Float {
+    return this.x * this.x + this.y * this.y
+}
+//fun isPointInsideResizeHandle(point: Offset, textItem: DrawText, density: Density): Corner? {
+//    val position = textItem.position
+//    val textBounds = Rect()
+//    val paint = Paint().apply {
+//        textSize = with(density) { textItem.fontSize.dp.toPx() }
+//    }
+//    paint.getTextBounds(textItem.text, 0, textItem.text.length, textBounds)
+//
+//    val textWidth = paint.measureText(textItem.text)
+//    val textHeight = textBounds.height()
+//
+//    val transformedSize = textItem.transformMatrix.mapRect(RectF(0f, 0f, textWidth, textHeight.toFloat()))
+//
+//    val topLeft = Offset(position.x, position.y - textHeight)
+//    val topRight = Offset(position.x + textWidth, position.y - textHeight)
+//    val bottomRight = Offset(position.x + textWidth, position.y)
+//    val bottomLeft = Offset(position.x, position.y)
+//
+//    val radius = 20
+//
+//    if (topLeft.minus(point).getDistanceSquared() < radius * radius) {
+//        return Corner.TopLeft
+//    }
+//    if (topRight.minus(point).getDistanceSquared() < radius * radius) {
+//        return Corner.TopRight
+//    }
+//    if (bottomRight.minus(point).getDistanceSquared() < radius * radius) {
+//        return Corner.BottomRight
+//    }
+//    if (bottomLeft.minus(point).getDistanceSquared() < radius * radius) {
+//        return Corner.BottomLeft
+//    }
+//
+//    return null
+//}
 
 enum class Corner {
     TopLeft,
