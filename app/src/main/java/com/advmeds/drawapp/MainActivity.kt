@@ -798,16 +798,22 @@ class MainActivity : ComponentActivity() {
                                             )
 
 
+                                            val centerPivot = Offset(
+                                                (item as DrawText).position.x + textWidth / 2,
+                                                (item as DrawText).position.y - textHeight / 2,
+
+                                                )
+
                                             val scaleX = when (currentResizeCorner.value) {
-                                                Corner.TopLeft, Corner.BottomLeft -> (((change.position.x - textWidth) - it.position.x) * -1) / ((initialDragPosition.value.x + textWidth) - it.position.x)
-                                                Corner.TopRight, Corner.BottomRight -> (change.position.x - it.position.x) / (initialDragPosition.value.x - it.position.x)
+                                                Corner.TopLeft, Corner.BottomLeft -> (((change.position.x - textWidth) - centerPivot.x) * -1) / ((it.position.x + textWidth) - centerPivot.x)
+                                                Corner.TopRight, Corner.BottomRight -> (change.position.x - centerPivot.x) / (it.position.x - centerPivot.x)
                                                 null -> 1f
                                             }
                                             val scaleY = when (currentResizeCorner.value) {
-                                                Corner.TopLeft -> (change.position.y - newPosition.y) / (initialDragPosition.value.y - newPosition.y)
-                                                Corner.TopRight -> (change.position.y - it.position.y) / (initialDragPosition.value.y - it.position.y)
+                                                Corner.TopLeft -> (change.position.y - centerPivot.y) / (it.position.y - centerPivot.y)
+                                                Corner.TopRight -> (change.position.y -centerPivot.y) / (it.position.y - centerPivot.y)
 
-                                                Corner.BottomRight, Corner.BottomLeft -> (((change.position.y + textHeight) - it.position.y)) / ((initialDragPosition.value.y + textHeight) - it.position.y)
+                                                Corner.BottomRight, Corner.BottomLeft -> (((change.position.y + textHeight) - centerPivot.y)) / ((it.position.y + textHeight) - centerPivot.y)
                                                 null -> 1f
                                             }
 
@@ -845,11 +851,7 @@ class MainActivity : ComponentActivity() {
 //
                                             val dragText = it
 
-                                            val centerPivot = Offset(
-                                                (item as DrawText).position.x + textWidth / 2,
-                                                (item as DrawText).position.y - textHeight / 2,
 
-                                                )
 
 //                                            dragText.transformMatrix.setScale(
 //                                                scaleX, scaleY,
@@ -865,7 +867,10 @@ class MainActivity : ComponentActivity() {
                                                 centerPivot.y
                                             )
 
-                                            Log.d("check---", "DrawingScreen: $matrix")
+                                            Log.d("check---", "DrawingScreen: \n" +
+                                                    "matrix - $matrix\n" +
+                                                    "scaleX - $scaleX\n" +
+                                                    "scaleY - $scaleY")
 
 
                                             dragText.transformMatrix = matrix
