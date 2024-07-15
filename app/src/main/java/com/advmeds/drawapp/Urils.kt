@@ -3,6 +3,7 @@ package com.advmeds.drawapp
 import android.graphics.Matrix
 import android.graphics.Paint
 import android.graphics.Rect
+import android.graphics.RectF
 import android.util.Log
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
@@ -34,6 +35,7 @@ import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import kotlin.math.PI
 import kotlin.math.abs
+import kotlin.math.max
 import kotlin.math.sign
 
 fun drawToBitmap(bitmap: ImageBitmap): ImageBitmap {
@@ -325,7 +327,11 @@ fun getTextWidthAndHeight(textItem: DrawText, density: Density): Pair<Float, Flo
     return Pair(textWidth, textHeight.toFloat())
 }
 
-fun getTextWidthAndHeightM(textItem: DrawText, density: Density, transformMatrix: Matrix): Pair<Float, Float> {
+fun getTextWidthAndHeightM(
+    textItem: DrawText,
+    density: Density,
+    transformMatrix: Matrix
+): Pair<Float, Float> {
     val position = textItem.position
 
     val textBounds = Rect()
@@ -361,7 +367,12 @@ fun getNewPosition(textItem: DrawText, density: Density): Offset {
 
     return Offset(bottomLeft[0], bottomLeft[1])
 }
-fun getNewPositionByTranslation(textItem: DrawText, density: Density, translationMatrix: Matrix): Offset {
+
+fun getNewPositionByTranslation(
+    textItem: DrawText,
+    density: Density,
+    translationMatrix: Matrix
+): Offset {
     val position = textItem.position
 
     val bottomLeft = floatArrayOf(position.x, position.y)
@@ -370,6 +381,7 @@ fun getNewPositionByTranslation(textItem: DrawText, density: Density, translatio
 
     return Offset(bottomLeft[0], bottomLeft[1])
 }
+
 fun getNewPositionByTranslation(point: Offset, translationMatrix: Matrix): Offset {
     val bottomLeft = floatArrayOf(point.x, point.y)
 
@@ -389,7 +401,59 @@ fun inverseMapPoint(matrix: Matrix, point: FloatArray): FloatArray {
     }
 }
 
-fun isPointInsideResizeHandle(point: Offset, textItem: DrawText, density: Density): Corner? {
+fun isPointInsideResizeHandleDrawObject(
+    point: Offset,
+    dragObject: DrawObject,
+    density: Density
+): Corner? {
+    if (dragObject.drawObjectType == DrawMode.Text) {
+        return isPointInsideResizeHandleText(point, (dragObject as DrawText), density)
+    }
+    if (dragObject.drawObjectType == DrawMode.Line) {
+        val line = (dragObject as DrawLine)
+        return isPointInsideResizeHandleLine(point, line.bounds, line.transformMatrix)
+    }
+
+    return null
+}
+
+fun isPointInsideResizeHandleLine(
+    point: Offset,
+    boundingBox: CustomRect,
+    transformMatrix: Matrix
+): Corner? {
+    val topLeft = boundingBox.topLeft.toFloatArray()
+    val topRight = boundingBox.topRight.toFloatArray()
+    val bottomRight = boundingBox.bottomRight.toFloatArray()
+    val bottomLeft = boundingBox.bottomLeft.toFloatArray()
+
+    transformMatrix.mapPoints(topLeft)
+    transformMatrix.mapPoints(topRight)
+    transformMatrix.mapPoints(bottomRight)
+    transformMatrix.mapPoints(bottomLeft)
+
+    val radius = 20
+
+    if (Offset(topLeft[0], topLeft[1]).minus(point).getDistanceSquared() < radius * radius) {
+        return Corner.TopLeft
+    }
+    if (Offset(topRight[0], topRight[1]).minus(point).getDistanceSquared() < radius * radius) {
+        return Corner.TopRight
+    }
+    if (Offset(bottomRight[0], bottomRight[1]).minus(point)
+            .getDistanceSquared() < radius * radius
+    ) {
+        return Corner.BottomRight
+    }
+    if (Offset(bottomLeft[0], bottomLeft[1]).minus(point).getDistanceSquared() < radius * radius) {
+        return Corner.BottomLeft
+    }
+
+    return null
+
+}
+
+fun isPointInsideResizeHandleText(point: Offset, textItem: DrawText, density: Density): Corner? {
     val position = textItem.position
     val textBounds = Rect()
     val paint = Paint().apply {
@@ -418,7 +482,9 @@ fun isPointInsideResizeHandle(point: Offset, textItem: DrawText, density: Densit
     if (Offset(topRight[0], topRight[1]).minus(point).getDistanceSquared() < radius * radius) {
         return Corner.TopRight
     }
-    if (Offset(bottomRight[0], bottomRight[1]).minus(point).getDistanceSquared() < radius * radius) {
+    if (Offset(bottomRight[0], bottomRight[1]).minus(point)
+            .getDistanceSquared() < radius * radius
+    ) {
         return Corner.BottomRight
     }
     if (Offset(bottomLeft[0], bottomLeft[1]).minus(point).getDistanceSquared() < radius * radius) {
@@ -429,12 +495,43 @@ fun isPointInsideResizeHandle(point: Offset, textItem: DrawText, density: Densit
 }
 
 
+fun isPointInsideDrawObject(point: Offset, drawObject: DrawObject, density: Density): Boolean {
+    if (drawObject.drawObjectType == DrawMode.Text) {
+        return isPointInsideText(point, (drawObject as DrawText), density)
+    }
+    if (drawObject.drawObjectType == DrawMode.Line) {
+        return isPointInsideLineArea(point, (drawObject as DrawLine))
+    }
+
+    return false
+}
+
+fun isPointInsideLineArea(point: Offset, drawLine: DrawLine): Boolean {
+    val topRight = drawLine.bounds.topRight.toFloatArray()
+    val bottomLeft = drawLine.bounds.bottomLeft.toFloatArray()
+
+    drawLine.transformMatrix.mapPoints(topRight)
+    drawLine.transformMatrix.mapPoints(bottomLeft)
+    val xRange = floatArrayOf(bottomLeft[0], topRight[0])
+    xRange.sort()
+
+    val yRange = floatArrayOf(bottomLeft[1], topRight[1])
+    yRange.sort()
+
+    val inX = point.x in xRange[0]..xRange[1]
+    val inY = point.y in yRange[0]..yRange[1]
+
+    return inX && inY
+}
+
 fun isPointInsideText(point: Offset, textItem: DrawText, density: Density): Boolean {
     val position = textItem.position
     val textBounds = Rect()
+
     val paint = Paint().apply {
         textSize = with(density) { textItem.fontSize.dp.toPx() }
     }
+
     paint.getTextBounds(textItem.text, 0, textItem.text.length, textBounds)
     val textWidth = paint.measureText(textItem.text)
     val textHeight = textBounds.height()
@@ -442,7 +539,6 @@ fun isPointInsideText(point: Offset, textItem: DrawText, density: Density): Bool
     val topRight = floatArrayOf(position.x + textWidth, position.y - textHeight)
     val bottomLeft = floatArrayOf(position.x, position.y)
 
-    // Apply the transformation matrix
     textItem.transformMatrix.mapPoints(topRight)
     textItem.transformMatrix.mapPoints(bottomLeft)
 
@@ -452,14 +548,9 @@ fun isPointInsideText(point: Offset, textItem: DrawText, density: Density): Bool
     val yRange = floatArrayOf(bottomLeft[1], topRight[1])
     yRange.sort()
 
-    Log.d("check---", "isPointInsideText: y ${yRange[0]}, ${yRange[1]}")
-    Log.d("check---", "isPointInsideText: x ${xRange[0]}, ${xRange[1]}")
-    Log.d("check---", "isPointInsideText: ${point.x}, ${point.y}")
-
     val inX = point.x in xRange[0]..xRange[1]
     val inY = point.y in yRange[0]..yRange[1]
 
-//    return inLeft && inTop && inRight && inBottom
     return inX && inY
 }
 
@@ -468,4 +559,25 @@ enum class Corner {
     TopRight,
     BottomRight,
     BottomLeft,
+}
+
+fun calculateBoundingBox(lines: List<Line>): CustomRect {
+    var minX = Float.MAX_VALUE
+    var maxX = Float.MIN_VALUE
+    var minY = Float.MAX_VALUE
+    var maxY = Float.MIN_VALUE
+
+    for (line in lines) {
+        if (line.start.x < minX) minX = line.start.x
+        if (line.start.x > maxX) maxX = line.start.x
+        if (line.start.y < minY) minY = line.start.y
+        if (line.start.y > maxY) maxY = line.start.y
+
+        if (line.end.x < minX) minX = line.end.x
+        if (line.end.x > maxX) maxX = line.end.x
+        if (line.end.y < minY) minY = line.end.y
+        if (line.end.y > maxY) maxY = line.end.y
+    }
+
+    return CustomRect(Offset(minX, maxY), Offset(maxX, minY))
 }
