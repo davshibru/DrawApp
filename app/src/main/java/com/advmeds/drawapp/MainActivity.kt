@@ -640,7 +640,8 @@ class MainActivity : ComponentActivity() {
                                                 density
                                             )
 
-                                            Log.d("check---", "DrawingScreen: $corners")
+                                            Log.d("check---", "DrawingScreen: corner -  $corners")
+                                            Log.d("check---", "DrawingScreen: tached - $isTouched")
                                             if (isTouched || corners != null) {
 
                                                 currentDragText.add(text)
@@ -788,10 +789,6 @@ class MainActivity : ComponentActivity() {
                                             val item =
                                                 drawBunch.value.find { static -> it.id == static.id }
 
-                                            val newPosition = getNewPosition(
-                                                it, density
-                                            )
-
                                             val (textWidth, textHeight) = getTextWidthAndHeight(
                                                 it,
                                                 density
@@ -805,59 +802,23 @@ class MainActivity : ComponentActivity() {
                                                 )
 
                                             val scaleX = when (currentResizeCorner.value) {
-                                                Corner.TopLeft, Corner.BottomLeft -> (((change.position.x - textWidth) - centerPivot.x) * -1) / ((it.position.x + textWidth) - centerPivot.x)
-                                                Corner.TopRight, Corner.BottomRight -> (change.position.x - centerPivot.x) / (it.position.x - centerPivot.x)
+                                                Corner.TopLeft, Corner.BottomLeft -> (((change.position.x - textWidth) - centerPivot.x) * -1) / (it.position.x - centerPivot.x)
+                                                Corner.TopRight, Corner.BottomRight -> (change.position.x - centerPivot.x) / ((it.position.x + textWidth) - centerPivot.x)
                                                 null -> 1f
                                             }
                                             val scaleY = when (currentResizeCorner.value) {
-                                                Corner.TopLeft -> (change.position.y - centerPivot.y) / (it.position.y - centerPivot.y)
-                                                Corner.TopRight -> (change.position.y -centerPivot.y) / (it.position.y - centerPivot.y)
+                                                Corner.TopLeft -> (change.position.y - centerPivot.y) / ((it.position.y - textHeight) - centerPivot.y)
+                                                Corner.TopRight -> (change.position.y - centerPivot.y) / ((it.position.y - textHeight) - centerPivot.y)
 
-                                                Corner.BottomRight, Corner.BottomLeft -> (((change.position.y + textHeight) - centerPivot.y)) / ((it.position.y + textHeight) - centerPivot.y)
+                                                Corner.BottomRight, Corner.BottomLeft -> (((change.position.y + textHeight) - centerPivot.y)) / (it.position.y - centerPivot.y)
                                                 null -> 1f
                                             }
 
                                             it.cumulativeScaleX = scaleX
                                             it.cumulativeScaleY = scaleY
 
-
-                                            // Set pivotPoint as opposite corner
-//                                            val pivotPoint = when (currentResizeCorner.value) {
-//                                                Corner.TopLeft -> Offset(
-//                                                    it.position.x + textWidth,
-//                                                    it.position.y
-//                                                )
-//
-//                                                Corner.TopRight -> Offset(
-//                                                    it.position.x,
-//                                                    it.position.y
-//                                                )
-//
-//                                                Corner.BottomRight -> Offset(
-//                                                    it.position.x,
-//                                                    it.position.y - textHeight
-//                                                )
-//
-//                                                Corner.BottomLeft -> Offset(
-//                                                    it.position.x + textWidth,
-//                                                    it.position.y - textHeight
-//                                                )
-//
-//                                                null -> Offset(
-//                                                    it.position.x,
-//                                                    it.position.y
-//                                                )
-//                                            }
-//
                                             val dragText = it
 
-
-
-//                                            dragText.transformMatrix.setScale(
-//                                                scaleX, scaleY,
-//                                                centerPivot.x,
-//                                                centerPivot.y
-//                                            )
 
                                             val matrix = android.graphics.Matrix()
                                             matrix.setScale(
@@ -867,31 +828,48 @@ class MainActivity : ComponentActivity() {
                                                 centerPivot.y
                                             )
 
-                                            Log.d("check---", "DrawingScreen: \n" +
-                                                    "matrix - $matrix\n" +
-                                                    "scaleX - $scaleX\n" +
-                                                    "scaleY - $scaleY")
-
+                                            matrix.postTranslate(
+                                                dragText.cumulativeTranslationX,
+                                                dragText.cumulativeTranslationY,
+                                            )
 
                                             dragText.transformMatrix = matrix
 
                                             newList.add(dragText)
                                         } else {
-//                                            val dragText = it.copy(
-//                                                position = it.position + dragAmount
-//                                            )
                                             val (textWidth, textHeight) = getTextWidthAndHeight(
                                                 it,
                                                 density
                                             )
 
-                                            val dragText = it
-
-                                            dragText.transformMatrix.setTranslate(
-                                                (change.position.x - it.position.x) - textWidth / 2,
-                                                (change.position.y - it.position.y) + textHeight / 2,
+                                            val centerPivot = Offset(
+                                                (it as DrawText).position.x + textWidth / 2,
+                                                (it as DrawText).position.y - textHeight / 2,
                                             )
 
+
+                                            val dragText = it
+
+                                            val matrix = android.graphics.Matrix()
+
+                                            dragText.cumulativeTranslationX =
+                                                (change.position.x - it.position.x) - textWidth / 2
+                                            dragText.cumulativeTranslationY =
+                                                (change.position.y - it.position.y) + textHeight / 2
+
+                                            matrix.setScale(
+                                                it.cumulativeScaleX,
+                                                it.cumulativeScaleY,
+                                                centerPivot.x,
+                                                centerPivot.y
+                                            )
+
+                                            matrix.postTranslate(
+                                                dragText.cumulativeTranslationX,
+                                                dragText.cumulativeTranslationY,
+                                            )
+
+                                            dragText.transformMatrix = matrix
 
                                             newList.add(dragText)
                                         }
@@ -1364,6 +1342,8 @@ data class DrawText(
     var transformMatrix: Matrix = Matrix(),
     var cumulativeScaleX: Float = 1f,
     var cumulativeScaleY: Float = 1f,
+    var cumulativeTranslationX: Float = 0f,
+    var cumulativeTranslationY: Float = 0f,
 ) : DrawObject
 
 data class DrawClear(

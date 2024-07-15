@@ -1,5 +1,6 @@
 package com.advmeds.drawapp
 
+import android.graphics.Matrix
 import android.graphics.Paint
 import android.graphics.Rect
 import android.util.Log
@@ -327,17 +328,38 @@ fun getTextWidthAndHeight(textItem: DrawText, density: Density): Pair<Float, Flo
 fun getNewPosition(textItem: DrawText, density: Density): Offset {
     val position = textItem.position
 
-    val textBounds = Rect()
-    val paint = Paint().apply {
-        textSize = with(density) { textItem.fontSize.dp.toPx() }
-    }
-    paint.getTextBounds(textItem.text, 0, textItem.text.length, textBounds)
-
     val bottomLeft = floatArrayOf(position.x, position.y)
 
     textItem.transformMatrix.mapPoints(bottomLeft)
 
     return Offset(bottomLeft[0], bottomLeft[1])
+}
+fun getNewPositionByTranslation(textItem: DrawText, density: Density, translationMatrix: Matrix): Offset {
+    val position = textItem.position
+
+    val bottomLeft = floatArrayOf(position.x, position.y)
+
+    translationMatrix.mapPoints(bottomLeft)
+
+    return Offset(bottomLeft[0], bottomLeft[1])
+}
+fun getNewPositionByTranslation(point: Offset, translationMatrix: Matrix): Offset {
+    val bottomLeft = floatArrayOf(point.x, point.y)
+
+    translationMatrix.mapPoints(bottomLeft)
+
+    return Offset(bottomLeft[0], bottomLeft[1])
+}
+
+fun inverseMapPoint(matrix: Matrix, point: FloatArray): FloatArray {
+    val inverseMatrix = Matrix()
+    if (matrix.invert(inverseMatrix)) {
+        val mappedPoint = FloatArray(2)
+        inverseMatrix.mapPoints(mappedPoint, point)
+        return mappedPoint
+    } else {
+        throw IllegalArgumentException("Matrix inversion failed")
+    }
 }
 
 fun isPointInsideResizeHandle(point: Offset, textItem: DrawText, density: Density): Corner? {
@@ -379,45 +401,6 @@ fun isPointInsideResizeHandle(point: Offset, textItem: DrawText, density: Densit
     return null
 }
 
-//fun isPointInsideResizeHandle(point: Offset, textItem: DrawText, density: Density): Corner? {
-//    val position = textItem.position
-//    val textBounds = Rect()
-//    val paint = Paint().apply {
-//        textSize = with(density) { textItem.fontSize.dp.toPx() }
-//    }
-//    paint.getTextBounds(textItem.text, 0, textItem.text.length, textBounds)
-//    val textWidth = paint.measureText(textItem.text)
-//    val textHeight = textBounds.height()
-//
-//    val topLeft = Offset(position.x, position.y - textHeight)
-//    val topRight = Offset(position.x + textWidth, position.y - textHeight)
-//    val bottomRight = Offset(position.x + textWidth, position.y)
-//    val bottomLeft = Offset(position.x, position.y)
-//
-//    val radius = 20
-//
-//    if (topLeft.minus(point).getDistanceSquared() < radius * radius) {
-//        return Corner.TopLeft
-//    }
-//    if (topRight.minus(point).getDistanceSquared() < radius * radius) {
-//        return Corner.TopRight
-//    }
-//    if (bottomRight.minus(point).getDistanceSquared() < radius * radius) {
-//        return Corner.BottomRight
-//    }
-//    if (bottomLeft.minus(point).getDistanceSquared() < radius * radius) {
-//        return Corner.BottomLeft
-//    }
-//
-//    return null
-//}
-
-enum class Corner {
-    TopLeft,
-    TopRight,
-    BottomRight,
-    BottomLeft,
-}
 
 fun isPointInsideText(point: Offset, textItem: DrawText, density: Density): Boolean {
     val position = textItem.position
@@ -429,13 +412,38 @@ fun isPointInsideText(point: Offset, textItem: DrawText, density: Density): Bool
     val textWidth = paint.measureText(textItem.text)
     val textHeight = textBounds.height()
 
-    val bottomLeft = Offset(position.x, position.y)
-    val topRight = Offset(position.x + textWidth, position.y - textHeight)
+    val topRight = floatArrayOf(position.x + textWidth, position.y - textHeight)
+    val bottomLeft = floatArrayOf(position.x, position.y)
 
-    val inLeft = point.x > bottomLeft.x
-    val inTop = point.y > topRight.y
-    val inRight = point.x < topRight.x
-    val inBottom = point.y < bottomLeft.y
+    // Apply the transformation matrix
+    textItem.transformMatrix.mapPoints(topRight)
+    textItem.transformMatrix.mapPoints(bottomLeft)
 
-    return inLeft && inTop && inRight && inBottom
+    val inLeft = point.x > bottomLeft[0]
+    val inTop = point.y > topRight[1]
+    val inRight = point.x < topRight[0]
+    val inBottom = point.y < bottomLeft[1]
+
+    val xRange = floatArrayOf(bottomLeft[0], topRight[0])
+    xRange.sort()
+
+    val yRange = floatArrayOf(bottomLeft[1], topRight[1])
+    yRange.sort()
+
+    Log.d("check---", "isPointInsideText: y ${yRange[0]}, ${yRange[1]}")
+    Log.d("check---", "isPointInsideText: x ${xRange[0]}, ${xRange[1]}")
+    Log.d("check---", "isPointInsideText: ${point.x}, ${point.y}")
+
+    val inX = point.x in xRange[0]..xRange[1]
+    val inY = point.y in yRange[0]..yRange[1]
+
+//    return inLeft && inTop && inRight && inBottom
+    return inX && inY
+}
+
+enum class Corner {
+    TopLeft,
+    TopRight,
+    BottomRight,
+    BottomLeft,
 }
