@@ -324,6 +324,22 @@ fun getTextWidthAndHeight(textItem: DrawText, density: Density): Pair<Float, Flo
     return Pair(textWidth, textHeight.toFloat())
 }
 
+fun getNewPosition(textItem: DrawText, density: Density): Offset {
+    val position = textItem.position
+
+    val textBounds = Rect()
+    val paint = Paint().apply {
+        textSize = with(density) { textItem.fontSize.dp.toPx() }
+    }
+    paint.getTextBounds(textItem.text, 0, textItem.text.length, textBounds)
+
+    val bottomLeft = floatArrayOf(position.x, position.y)
+
+    textItem.transformMatrix.mapPoints(bottomLeft)
+
+    return Offset(bottomLeft[0], bottomLeft[1])
+}
+
 fun isPointInsideResizeHandle(point: Offset, textItem: DrawText, density: Density): Corner? {
     val position = textItem.position
     val textBounds = Rect()
@@ -332,30 +348,69 @@ fun isPointInsideResizeHandle(point: Offset, textItem: DrawText, density: Densit
     }
     paint.getTextBounds(textItem.text, 0, textItem.text.length, textBounds)
     val textWidth = paint.measureText(textItem.text)
-    val textHeight = textBounds.height()
+    val textHeight = textBounds.height().toFloat()
 
-    val topLeft = Offset(position.x, position.y - textHeight)
-    val topRight = Offset(position.x + textWidth, position.y - textHeight)
-    val bottomRight = Offset(position.x + textWidth, position.y)
-    val bottomLeft = Offset(position.x, position.y)
+    val topLeft = floatArrayOf(position.x, position.y - textHeight)
+    val topRight = floatArrayOf(position.x + textWidth, position.y - textHeight)
+    val bottomRight = floatArrayOf(position.x + textWidth, position.y)
+    val bottomLeft = floatArrayOf(position.x, position.y)
+
+    // Apply the transformation matrix
+    textItem.transformMatrix.mapPoints(topLeft)
+    textItem.transformMatrix.mapPoints(topRight)
+    textItem.transformMatrix.mapPoints(bottomRight)
+    textItem.transformMatrix.mapPoints(bottomLeft)
 
     val radius = 20
 
-    if (topLeft.minus(point).getDistanceSquared() < radius * radius) {
+    if (Offset(topLeft[0], topLeft[1]).minus(point).getDistanceSquared() < radius * radius) {
         return Corner.TopLeft
     }
-    if (topRight.minus(point).getDistanceSquared() < radius * radius) {
+    if (Offset(topRight[0], topRight[1]).minus(point).getDistanceSquared() < radius * radius) {
         return Corner.TopRight
     }
-    if (bottomRight.minus(point).getDistanceSquared() < radius * radius) {
+    if (Offset(bottomRight[0], bottomRight[1]).minus(point).getDistanceSquared() < radius * radius) {
         return Corner.BottomRight
     }
-    if (bottomLeft.minus(point).getDistanceSquared() < radius * radius) {
+    if (Offset(bottomLeft[0], bottomLeft[1]).minus(point).getDistanceSquared() < radius * radius) {
         return Corner.BottomLeft
     }
 
     return null
 }
+
+//fun isPointInsideResizeHandle(point: Offset, textItem: DrawText, density: Density): Corner? {
+//    val position = textItem.position
+//    val textBounds = Rect()
+//    val paint = Paint().apply {
+//        textSize = with(density) { textItem.fontSize.dp.toPx() }
+//    }
+//    paint.getTextBounds(textItem.text, 0, textItem.text.length, textBounds)
+//    val textWidth = paint.measureText(textItem.text)
+//    val textHeight = textBounds.height()
+//
+//    val topLeft = Offset(position.x, position.y - textHeight)
+//    val topRight = Offset(position.x + textWidth, position.y - textHeight)
+//    val bottomRight = Offset(position.x + textWidth, position.y)
+//    val bottomLeft = Offset(position.x, position.y)
+//
+//    val radius = 20
+//
+//    if (topLeft.minus(point).getDistanceSquared() < radius * radius) {
+//        return Corner.TopLeft
+//    }
+//    if (topRight.minus(point).getDistanceSquared() < radius * radius) {
+//        return Corner.TopRight
+//    }
+//    if (bottomRight.minus(point).getDistanceSquared() < radius * radius) {
+//        return Corner.BottomRight
+//    }
+//    if (bottomLeft.minus(point).getDistanceSquared() < radius * radius) {
+//        return Corner.BottomLeft
+//    }
+//
+//    return null
+//}
 
 enum class Corner {
     TopLeft,
