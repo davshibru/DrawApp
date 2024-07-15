@@ -794,23 +794,39 @@ class MainActivity : ComponentActivity() {
                                                 density
                                             )
 
+                                            val translateMatrix = android.graphics.Matrix()
+
+                                            translateMatrix.postTranslate(
+                                                it.cumulativeTranslationX,
+                                                it.cumulativeTranslationY,
+                                            )
+
+                                            val newPosition = getNewPositionByTranslation(
+                                                it.position,
+                                                translationMatrix = translateMatrix
+                                            )
+
 
                                             val centerPivot = Offset(
                                                 (item as DrawText).position.x + textWidth / 2,
                                                 (item as DrawText).position.y - textHeight / 2,
+                                            )
 
-                                                )
+                                            val newCenterPoint = Offset(
+                                                newPosition.x + textWidth / 2,
+                                                newPosition.y - textHeight / 2,
+                                            )
 
                                             val scaleX = when (currentResizeCorner.value) {
-                                                Corner.TopLeft, Corner.BottomLeft -> (((change.position.x - textWidth) - centerPivot.x) * -1) / (it.position.x - centerPivot.x)
-                                                Corner.TopRight, Corner.BottomRight -> (change.position.x - centerPivot.x) / ((it.position.x + textWidth) - centerPivot.x)
+                                                Corner.TopLeft, Corner.BottomLeft -> (((change.position.x - textWidth) - newCenterPoint.x) * -1) / (newPosition.x - newCenterPoint.x)
+                                                Corner.TopRight, Corner.BottomRight -> (change.position.x - newCenterPoint.x) / ((newPosition.x + textWidth) - newCenterPoint.x)
                                                 null -> 1f
                                             }
                                             val scaleY = when (currentResizeCorner.value) {
-                                                Corner.TopLeft -> (change.position.y - centerPivot.y) / ((it.position.y - textHeight) - centerPivot.y)
-                                                Corner.TopRight -> (change.position.y - centerPivot.y) / ((it.position.y - textHeight) - centerPivot.y)
+                                                Corner.TopLeft -> (change.position.y - newCenterPoint.y) / ((newPosition.y - textHeight) - newCenterPoint.y)
+                                                Corner.TopRight -> (change.position.y - newCenterPoint.y) / ((newPosition.y - textHeight) - newCenterPoint.y)
 
-                                                Corner.BottomRight, Corner.BottomLeft -> (((change.position.y + textHeight) - centerPivot.y)) / (it.position.y - centerPivot.y)
+                                                Corner.BottomRight, Corner.BottomLeft -> (((change.position.y + textHeight) - newCenterPoint.y)) / (newPosition.y - newCenterPoint.y)
                                                 null -> 1f
                                             }
 

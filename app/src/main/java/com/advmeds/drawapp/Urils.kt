@@ -325,6 +325,33 @@ fun getTextWidthAndHeight(textItem: DrawText, density: Density): Pair<Float, Flo
     return Pair(textWidth, textHeight.toFloat())
 }
 
+fun getTextWidthAndHeightM(textItem: DrawText, density: Density, transformMatrix: Matrix): Pair<Float, Float> {
+    val position = textItem.position
+
+    val textBounds = Rect()
+    val paint = Paint().apply {
+        textSize = with(density) { textItem.fontSize.dp.toPx() }
+    }
+    paint.getTextBounds(textItem.text, 0, textItem.text.length, textBounds)
+    val textWidth = paint.measureText(textItem.text)
+    val textHeight = textBounds.height()
+
+    val topRight = floatArrayOf(position.x + textWidth, position.y - textHeight)
+    val bottomLeft = floatArrayOf(position.x, position.y)
+
+    // Apply the transformation matrix
+    transformMatrix.mapPoints(topRight)
+    transformMatrix.mapPoints(bottomLeft)
+
+    val xRange = floatArrayOf(bottomLeft[0], topRight[0])
+    xRange.sort()
+
+    val yRange = floatArrayOf(bottomLeft[1], topRight[1])
+    yRange.sort()
+
+    return Pair(xRange[1] - xRange[0], yRange[1] - yRange[0])
+}
+
 fun getNewPosition(textItem: DrawText, density: Density): Offset {
     val position = textItem.position
 
@@ -418,11 +445,6 @@ fun isPointInsideText(point: Offset, textItem: DrawText, density: Density): Bool
     // Apply the transformation matrix
     textItem.transformMatrix.mapPoints(topRight)
     textItem.transformMatrix.mapPoints(bottomLeft)
-
-    val inLeft = point.x > bottomLeft[0]
-    val inTop = point.y > topRight[1]
-    val inRight = point.x < topRight[0]
-    val inBottom = point.y < bottomLeft[1]
 
     val xRange = floatArrayOf(bottomLeft[0], topRight[0])
     xRange.sort()
