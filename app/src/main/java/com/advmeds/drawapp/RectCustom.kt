@@ -24,10 +24,22 @@ data class CustomRect(
     )
 
     val width: Float
-        get() = topRight.x - topLeft.x
+        get() {
+            val xRange = floatArrayOf(bottomLeft.x, topRight.x)
+            xRange.sort()
+
+
+            return xRange[1] - xRange[0]
+        }
+
 
     val height: Float
-        get() = bottomLeft.y - topLeft.y
+        get() {
+            val yRange = floatArrayOf(bottomLeft.y, topRight.y)
+            yRange.sort()
+
+            return yRange[1] - yRange[0]
+        }
 
     fun contains(x: Float, y: Float): Boolean {
         val xRange = floatArrayOf(bottomLeft.x, topRight.x)

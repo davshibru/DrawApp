@@ -3,7 +3,6 @@ package com.advmeds.drawapp
 import android.graphics.Matrix
 import android.graphics.Paint
 import android.graphics.Rect
-import android.graphics.RectF
 import android.util.Log
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
@@ -35,7 +34,6 @@ import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import kotlin.math.PI
 import kotlin.math.abs
-import kotlin.math.max
 import kotlin.math.sign
 
 fun drawToBitmap(bitmap: ImageBitmap): ImageBitmap {
@@ -314,7 +312,18 @@ private val mouseSlop = 0.125.dp
 private val defaultTouchSlop = 18.dp // The default touch slop on Android devices
 private val mouseToTouchSlopRatio = mouseSlop / defaultTouchSlop
 
+fun getDraggedObjectWidthAndHeight(dragObject: DrawObject, density: Density): Pair<Float, Float> {
+    if (dragObject.drawObjectType == DrawMode.Text) {
+        return getTextWidthAndHeight((dragObject as DrawText), density)
+    }
 
+    if (dragObject.drawObjectType == DrawMode.Line) {
+        val line = dragObject as DrawLine
+        return line.bounds.width to line.bounds.height
+    }
+
+    return 0f to 0f
+}
 fun getTextWidthAndHeight(textItem: DrawText, density: Density): Pair<Float, Float> {
     val textBounds = Rect()
     val paint = Paint().apply {
@@ -426,6 +435,8 @@ fun isPointInsideResizeHandleLine(
     val topRight = boundingBox.topRight.toFloatArray()
     val bottomRight = boundingBox.bottomRight.toFloatArray()
     val bottomLeft = boundingBox.bottomLeft.toFloatArray()
+
+    Log.d("check---", "isPointInsideResizeHandleLine: bottomLeft - ${boundingBox.bottomLeft}")
 
     transformMatrix.mapPoints(topLeft)
     transformMatrix.mapPoints(topRight)
@@ -578,6 +589,12 @@ fun calculateBoundingBox(lines: List<Line>): CustomRect {
         if (line.end.y < minY) minY = line.end.y
         if (line.end.y > maxY) maxY = line.end.y
     }
+
+
+    android.util.Log.d("check---", "calculateBoundingBox: minX - $minX")
+    android.util.Log.d("check---", "calculateBoundingBox: maxX - $maxX")
+    android.util.Log.d("check---", "calculateBoundingBox: minY - $minY")
+    android.util.Log.d("check---", "calculateBoundingBox: maxY - $maxY")
 
     return CustomRect(Offset(minX, maxY), Offset(maxX, minY))
 }
