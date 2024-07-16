@@ -1,5 +1,6 @@
 package com.advmeds.drawapp
 
+import android.graphics.Bitmap
 import android.graphics.Matrix
 import android.graphics.Paint
 import android.graphics.Rect
@@ -17,6 +18,7 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Canvas
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.graphics.drawscope.CanvasDrawScope
 import androidx.compose.ui.input.pointer.AwaitPointerEventScope
 import androidx.compose.ui.input.pointer.PointerEvent
@@ -32,185 +34,10 @@ import androidx.compose.ui.platform.ViewConfiguration
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import kotlin.math.PI
 import kotlin.math.abs
 import kotlin.math.sign
-
-suspend fun PointerInputScope.detectDragGesturesCustom(
-    onTap: (Offset) -> Unit,
-    onDragStart: (Offset) -> Unit = { },
-    onDragEnd: () -> Unit = { },
-    onDragCancel: () -> Unit = { },
-    onDrag: (change: PointerInputChange, dragAmount: Offset) -> Unit
-) {
-
-    awaitEachGesture {
-        val down = awaitFirstDown(requireUnconsumed = false)
-
-        val event = awaitPointerEvent()
-
-        if (event.changes.count() > 1) {
-            return@awaitEachGesture
-        }
-
-        var drag: PointerInputChange?
-        var overSlop = Offset.Zero
-        do {
-            drag = awaitPointerSlopOrCancellationCustom(
-                down.id,
-                down.type,
-                triggerOnMainAxisSlop = false
-            ) { change, over ->
-                change.consume()
-                overSlop = over
-            }
-        } while (drag != null && !drag.isConsumed)
-        if (drag != null) {
-            onDragStart.invoke(drag.position)
-            onDrag(drag, overSlop)
-            if (
-                !drag(drag.id) {
-                    onDrag(it, it.positionChange())
-                    it.consume()
-                }
-            ) {
-                onDragCancel()
-            } else {
-                onDragEnd()
-            }
-        } else {
-            onTap.invoke(down.position)
-        }
-    }
-}
-
-internal suspend inline fun AwaitPointerEventScope.awaitPointerSlopOrCancellationCustom(
-    pointerId: PointerId,
-    pointerType: PointerType,
-    pointerDirectionConfig: PointerDirectionConfigCustom = HorizontalPointerDirectionConfigCustom,
-    triggerOnMainAxisSlop: Boolean = true,
-    onPointerSlopReached: (PointerInputChange, Offset) -> Unit,
-): PointerInputChange? {
-    if (currentEvent.isPointerUp(pointerId)) {
-        return null // The pointer has already been lifted, so the gesture is canceled
-    }
-    val touchSlop = viewConfiguration.pointerSlopCustom(pointerType)
-    var pointer: PointerId = pointerId
-    var totalMainPositionChange = 0f
-    var totalCrossPositionChange = 0f
-
-    while (true) {
-        val event = awaitPointerEvent()
-        val dragEvent = event.changes.firstOrNull { it.id == pointer } ?: return null
-        if (dragEvent.isConsumed) {
-            return null
-        } else if (dragEvent.changedToUpIgnoreConsumed()) {
-            val otherDown = event.changes.firstOrNull { it.pressed }
-            if (otherDown == null) {
-                // This is the last "up"
-                return null
-            } else {
-                pointer = otherDown.id
-            }
-        } else {
-            val currentPosition = dragEvent.position
-            val previousPosition = dragEvent.previousPosition
-
-            val mainPositionChange = pointerDirectionConfig.mainAxisDelta(currentPosition) -
-                    pointerDirectionConfig.mainAxisDelta(previousPosition)
-
-            val crossPositionChange = pointerDirectionConfig.crossAxisDelta(currentPosition) -
-                    pointerDirectionConfig.crossAxisDelta(previousPosition)
-            totalMainPositionChange += mainPositionChange
-            totalCrossPositionChange += crossPositionChange
-
-            val inDirection = if (triggerOnMainAxisSlop) {
-                abs(totalMainPositionChange)
-            } else {
-                pointerDirectionConfig.offsetFromChanges(
-                    totalMainPositionChange,
-                    totalCrossPositionChange
-                ).getDistance()
-            }
-            if (inDirection < touchSlop) {
-                // verify that nothing else consumed the drag event
-                awaitPointerEvent(PointerEventPass.Final)
-                if (dragEvent.isConsumed) {
-                    return null
-                }
-            } else {
-                val postSlopOffset = if (triggerOnMainAxisSlop) {
-                    val finalMainPositionChange = totalMainPositionChange -
-                            (sign(totalMainPositionChange) * touchSlop)
-                    pointerDirectionConfig.offsetFromChanges(
-                        finalMainPositionChange,
-                        totalCrossPositionChange
-                    )
-                } else {
-                    val offset = pointerDirectionConfig.offsetFromChanges(
-                        totalMainPositionChange,
-                        totalCrossPositionChange
-                    )
-                    val touchSlopOffset = offset / inDirection * touchSlop
-                    offset - touchSlopOffset
-                }
-
-                onPointerSlopReached(
-                    dragEvent,
-                    postSlopOffset
-                )
-                if (dragEvent.isConsumed) {
-                    return dragEvent
-                } else {
-                    totalMainPositionChange = 0f
-                    totalCrossPositionChange = 0f
-                }
-            }
-        }
-    }
-}
-
-interface PointerDirectionConfigCustom {
-    fun mainAxisDelta(offset: Offset): Float
-    fun crossAxisDelta(offset: Offset): Float
-    fun offsetFromChanges(mainChange: Float, crossChange: Float): Offset
-}
-
-/**
- * Used for monitoring changes on X axis.
- */
-internal val HorizontalPointerDirectionConfigCustom = object : PointerDirectionConfigCustom {
-    override fun mainAxisDelta(offset: Offset): Float = offset.x
-    override fun crossAxisDelta(offset: Offset): Float = offset.y
-    override fun offsetFromChanges(mainChange: Float, crossChange: Float): Offset =
-        Offset(mainChange, crossChange)
-}
-
-/**
- * Used for monitoring changes on Y axis.
- */
-internal val VerticalPointerDirectionConfigCustom = object : PointerDirectionConfigCustom {
-    override fun mainAxisDelta(offset: Offset): Float = offset.y
-
-    override fun crossAxisDelta(offset: Offset): Float = offset.x
-
-    override fun offsetFromChanges(mainChange: Float, crossChange: Float): Offset =
-        Offset(crossChange, mainChange)
-}
-
-private fun PointerEvent.isPointerUp(pointerId: PointerId): Boolean =
-    changes.firstOrNull { it.id == pointerId }?.pressed != true
-
-internal fun ViewConfiguration.pointerSlopCustom(pointerType: PointerType): Float {
-    return when (pointerType) {
-        PointerType.Mouse -> touchSlop * mouseToTouchSlopRatio
-        else -> touchSlop
-    }
-}
-
-private val mouseSlop = 0.125.dp
-private val defaultTouchSlop = 18.dp // The default touch slop on Android devices
-private val mouseToTouchSlopRatio = mouseSlop / defaultTouchSlop
 
 fun getDraggedObjectWidthAndHeight(dragObject: DrawObject, density: Density): Pair<Float, Float> {
     if (dragObject.drawObjectType == DrawMode.Text) {
@@ -224,6 +51,7 @@ fun getDraggedObjectWidthAndHeight(dragObject: DrawObject, density: Density): Pa
 
     return 0f to 0f
 }
+
 fun getTextWidthAndHeight(textItem: DrawText, density: Density): Pair<Float, Float> {
     val textBounds = Rect()
     val paint = Paint().apply {
@@ -423,11 +251,76 @@ fun calculateBoundingBox(lines: List<Line>): CustomRect {
         if (line.end.y > maxY) maxY = line.end.y
     }
 
-
-    android.util.Log.d("check---", "calculateBoundingBox: minX - $minX")
-    android.util.Log.d("check---", "calculateBoundingBox: maxX - $maxX")
-    android.util.Log.d("check---", "calculateBoundingBox: minY - $minY")
-    android.util.Log.d("check---", "calculateBoundingBox: maxY - $maxY")
-
     return CustomRect(Offset(minX, maxY), Offset(maxX, minY))
+}
+
+fun Color.toArgb(): Int {
+    return android.graphics.Color.argb(
+        (alpha * 255).toInt(),
+        (red * 255).toInt(),
+        (green * 255).toInt(),
+        (blue * 255).toInt()
+    )
+}
+
+fun createBitmapFromLines(
+    image: ImageBitmap,
+    canvasWidth: Float,
+    canvasHeight: Float,
+    drawBunch: DrawBunch,
+    density: Density,
+): Bitmap {
+    val bitmap = Bitmap.createBitmap(
+        canvasWidth.toInt(), canvasHeight.toInt(), Bitmap.Config.ARGB_8888
+    )
+
+    val canvas = android.graphics.Canvas(bitmap)
+    val paint = Paint()
+
+    val dest = Rect(0, 0, canvasWidth.toInt(), canvasHeight.toInt())
+    paint.isFilterBitmap = true
+    canvas.drawBitmap(image.asAndroidBitmap(), null, dest, paint)
+
+    drawBunch.forEach { bunch ->
+
+        when (bunch.drawObjectType) {
+            DrawMode.Text -> {
+                val textObject = (bunch as DrawText)
+
+                paint.color = textObject.color.toArgb()
+                paint.textSize = with(density) { textObject.fontSize.sp.toPx() }
+                canvas.save()
+                canvas.concat(textObject.transformMatrix)
+                canvas.drawText(
+                    textObject.text,
+                    textObject.position.x,
+                    textObject.position.y,
+                    paint
+                )
+                canvas.restore()
+            }
+
+            DrawMode.Line -> {
+                (bunch as DrawLine).list.forEach { line ->
+                    paint.color = line.color.toArgb()
+                    paint.strokeWidth = with(density) { line.strokeWidth.toPx() }
+                    paint.strokeCap = Paint.Cap.ROUND
+                    canvas.save()
+                    canvas.concat(bunch.transformMatrix)
+                    canvas.drawLine(
+                        line.start.x,
+                        line.start.y,
+                        line.end.x,
+                        line.end.y,
+                        paint
+                    )
+                    canvas.restore()
+                }
+            }
+
+            DrawMode.Select, DrawMode.Clear -> {}
+        }
+    }
+
+    return bitmap
 }

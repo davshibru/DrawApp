@@ -2,10 +2,7 @@ package com.advmeds.drawapp
 
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
-import android.graphics.Paint
-import android.graphics.Rect
 import android.os.Bundle
-import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.Canvas
@@ -24,6 +21,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.CircleShape
@@ -46,28 +44,19 @@ import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.runtime.snapshots.SnapshotStateList
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
-import androidx.compose.ui.graphics.StrokeCap
-import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.graphics.asImageBitmap
-import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
-import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
-import androidx.compose.ui.unit.Density
-import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.advmeds.drawapp.ui.theme.DrawAppTheme
-import android.graphics.Canvas as AndroidCanvas
-import android.graphics.Color as AndroidColor
 
 
 typealias DrawBunch = List<DrawObject>
@@ -123,6 +112,14 @@ class MainActivity : ComponentActivity() {
                         mutableStateOf<Any?>(null)
                     }
 
+                    val afTextTool = remember {
+                        mutableStateOf<Any?>(null)
+                    }
+
+                    val straightLine = remember {
+                        mutableStateOf<Any?>(null)
+                    }
+
                     val currentText = remember {
                         mutableStateOf<String?>(null)
                     }
@@ -143,304 +140,282 @@ class MainActivity : ComponentActivity() {
                         mutableStateOf(false)
                     }
 
-                    val shape = MaterialTheme.shapes.small
+                    val turnTool: (ToolType) -> Unit = {
+                        currentSize.value = null
+                        currentTextSize.value = null
+                        selectTool.value = null
+                        afTextTool.value = null
+                        straightLine.value = null
+
+                        when (it) {
+                            is ToolType.Text -> currentTextSize.value = it.textSize
+                            is ToolType.Line -> currentSize.value = it.lineSize
+                            ToolType.Select -> selectTool.value = Any()
+                            ToolType.AfText -> afTextTool.value = Any()
+                            ToolType.StraightLine -> straightLine.value = Any()
+                        }
+                    }
 
                     Box(modifier = Modifier.fillMaxSize()) {
                         LazyColumn(
-                            modifier = Modifier
-                                .fillMaxSize()
+                            modifier = Modifier.fillMaxSize(),
                         ) {
 
                             item {
                                 val density = LocalDensity.current
 
-                                Button(onClick = {
-                                    newBitmap =
-                                        createBitmapFromLines(
-                                            image = bitmap,
-                                            canvasWidth = canvasWidth,
-                                            canvasHeight = canvasHeight,
-                                            drawBunch = drawBunch.value,
-                                            density = density
-                                        )
+                                Button(
+                                    onClick = {
+                                        newBitmap =
+                                            createBitmapFromLines(
+                                                image = bitmap,
+                                                canvasWidth = canvasWidth,
+                                                canvasHeight = canvasHeight,
+                                                drawBunch = drawBunch.value,
+                                                density = density
+                                            )
 
 
-                                }) {
+                                    }
+                                ) {
                                     Text(text = "Send")
                                 }
                             }
 
                             item {
+                                Divider()
+                            }
+
+                            item {
                                 Row(
-                                    modifier = Modifier.fillMaxSize(),
+                                    modifier = Modifier
+                                        .fillMaxSize()
+                                        .padding(top = 10.dp, bottom = 7.dp), // TODO add res
                                     horizontalArrangement = Arrangement.spacedBy(10.dp)
                                 ) {
-
-                                    Box(
-                                        modifier = Modifier
-                                            .size(30.dp)
-                                            .border(
-                                                color = Color.Gray,
-                                                width = 1.dp,
-                                                shape = shape
+                                    ButtonItem(
+                                        content = { modifier ->
+                                            Icon(
+                                                modifier = modifier,
+                                                painter = painterResource(id = R.drawable.undo_ic),
+                                                contentDescription = null
                                             )
-                                            .background(
-                                                color = Color.White,
-                                                shape = shape,
-                                            )
-                                            .clickable {
-                                                val newUnDoStack = drawBunch.value.toMutableList()
+                                        },
+                                        onClick = {
+                                            val newUnDoStack = drawBunch.value.toMutableList()
 
-                                                if (newUnDoStack.isEmpty()) {
-                                                    if (reDoStack.value.isEmpty()) {
-                                                        return@clickable
-                                                    }
-
-                                                    val lastReDoStackObject = reDoStack.value.last()
-
-                                                    val isLastActionWasClear =
-                                                        (lastReDoStackObject is DrawClear)
-
-                                                    if (!isLastActionWasClear) {
-                                                        return@clickable
-                                                    }
-
-                                                    val newUnDo = reDoStack.value
-
-                                                    drawBunch.value = newUnDo
-                                                    reDoStack.value = emptyList()
-
-
-                                                    return@clickable
+                                            if (newUnDoStack.isEmpty()) {
+                                                if (reDoStack.value.isEmpty()) {
+                                                    return@ButtonItem
                                                 }
 
-                                                val lastElement = newUnDoStack.removeLast()
+                                                val lastReDoStackObject = reDoStack.value.last()
 
-                                                val newRedoStack = reDoStack.value.toMutableList()
+                                                val isLastActionWasClear =
+                                                    (lastReDoStackObject is DrawClear)
 
-                                                newRedoStack.add(lastElement)
+                                                if (!isLastActionWasClear) {
+                                                    return@ButtonItem
+                                                }
 
-                                                drawBunch.value = newUnDoStack
-                                                reDoStack.value = newRedoStack
+                                                val newUnDo = reDoStack.value
+
+                                                drawBunch.value = newUnDo
+                                                reDoStack.value = emptyList()
+
+                                                return@ButtonItem
                                             }
-                                    ) {
-                                        Icon(
-                                            modifier = Modifier.align(Alignment.Center),
-                                            painter = painterResource(id = R.drawable.undo_ic),
-                                            contentDescription = null
-                                        )
-                                    }
 
-                                    Box(
-                                        modifier = Modifier
-                                            .size(30.dp)
-                                            .border(
-                                                color = Color.Gray,
-                                                width = 1.dp,
-                                                shape = shape
+                                            val lastElement = newUnDoStack.removeLast()
+
+                                            val newRedoStack = reDoStack.value.toMutableList()
+
+                                            newRedoStack.add(lastElement)
+
+                                            drawBunch.value = newUnDoStack
+                                            reDoStack.value = newRedoStack
+                                        }
+                                    )
+
+                                    ButtonItem(
+                                        content = { modifier ->
+                                            Icon(
+                                                modifier = modifier,
+                                                painter = painterResource(id = R.drawable.redo_ic),
+                                                contentDescription = null
                                             )
-                                            .background(
-                                                color = Color.White,
-                                                shape = shape,
-                                            )
-                                            .clickable {
-                                                val newRedoStack = reDoStack.value.toMutableList()
+                                        },
+                                        onClick = {
+                                            val newRedoStack = reDoStack.value.toMutableList()
 
-                                                if (newRedoStack.isEmpty()) {
-                                                    if (drawBunch.value.isEmpty()) {
-                                                        return@clickable
-                                                    }
-
-                                                    val lastReDoObject = drawBunch.value.last()
-
-                                                    val isLastUnDoActionWasClear =
-                                                        (lastReDoObject is DrawClear)
-
-                                                    if (!isLastUnDoActionWasClear) {
-                                                        return@clickable
-                                                    }
-
-                                                    val newReDo = drawBunch.value
-
-                                                    drawBunch.value = emptyList()
-                                                    reDoStack.value = newReDo
-
-                                                    return@clickable
+                                            if (newRedoStack.isEmpty()) {
+                                                if (drawBunch.value.isEmpty()) {
+                                                    return@ButtonItem
                                                 }
 
-                                                val lastElement = newRedoStack.removeLast()
+                                                val lastReDoObject = drawBunch.value.last()
 
-                                                val newUnDoStack = drawBunch.value.toMutableList()
+                                                val isLastUnDoActionWasClear =
+                                                    (lastReDoObject is DrawClear)
 
-                                                newUnDoStack.add(lastElement)
-
-                                                drawBunch.value = newUnDoStack
-                                                reDoStack.value = newRedoStack
-                                            }
-                                    ) {
-                                        Icon(
-                                            modifier = Modifier.align(Alignment.Center),
-                                            painter = painterResource(id = R.drawable.redo_ic),
-                                            contentDescription = null
-                                        )
-                                    }
-
-                                    Box(
-                                        modifier = Modifier
-                                            .size(30.dp)
-                                            .border(
-                                                color = Color.Gray,
-                                                width = 1.dp,
-                                                shape = shape
-                                            )
-                                            .background(
-                                                color = Color.White,
-                                                shape = shape,
-                                            )
-                                            .clickable {
-                                                val newUnDoStack = drawBunch.value.toMutableList()
-
-                                                if (newUnDoStack.isEmpty()) {
-                                                    return@clickable
+                                                if (!isLastUnDoActionWasClear) {
+                                                    return@ButtonItem
                                                 }
 
-                                                val newRedoStack = newUnDoStack.toMutableList()
-
-                                                val clearState = DrawClear()
-
-                                                newRedoStack.add(clearState)
+                                                val newReDo = drawBunch.value
 
                                                 drawBunch.value = emptyList()
-                                                reDoStack.value = newRedoStack
+                                                reDoStack.value = newReDo
+
+                                                return@ButtonItem
                                             }
+
+                                            val lastElement = newRedoStack.removeLast()
+
+                                            val newUnDoStack = drawBunch.value.toMutableList()
+
+                                            newUnDoStack.add(lastElement)
+
+                                            drawBunch.value = newUnDoStack
+                                            reDoStack.value = newRedoStack
+                                        }
+                                    )
+
+                                    ButtonItem(
+                                        content = { modifier ->
+                                            Icon(
+                                                modifier = modifier,
+                                                painter = painterResource(id = R.drawable.clear_ic),
+                                                contentDescription = null
+                                            )
+                                        },
+                                        onClick = {
+                                            val newUnDoStack = drawBunch.value.toMutableList()
+
+                                            if (newUnDoStack.isEmpty()) {
+                                                return@ButtonItem
+                                            }
+
+                                            val newRedoStack = newUnDoStack.toMutableList()
+
+                                            val clearState = DrawClear()
+
+                                            newRedoStack.add(clearState)
+
+                                            drawBunch.value = emptyList()
+                                            reDoStack.value = newRedoStack
+                                        }
+                                    )
+
+                                    ButtonItem(
+                                        isSelected = selectTool.value != null,
+                                        content = { modifier ->
+                                            Icon(
+                                                modifier = modifier,
+                                                painter = painterResource(id = R.drawable.mouse_ic),
+                                                contentDescription = null
+                                            )
+                                        }
                                     ) {
-                                        Icon(
-                                            modifier = Modifier.align(Alignment.Center),
-                                            painter = painterResource(id = R.drawable.clear_ic),
-                                            contentDescription = null
-                                        )
+                                        turnTool.invoke(ToolType.Select)
                                     }
 
                                     Box(
-                                        modifier = Modifier
-                                            .size(30.dp)
-                                            .border(
-                                                color = Color.Gray,
-                                                width = 1.dp,
-                                                shape = shape
-                                            )
-                                            .background(
-                                                color = if (selectTool.value != null) Color.Gray else Color.White,
-                                                shape = shape,
-                                            )
-                                            .clickable {
-                                                currentSize.value = null
-                                                currentTextSize.value = null
-                                                selectTool.value = Any()
-                                            }
-                                    ) {
-                                        Icon(
-                                            modifier = Modifier.align(Alignment.Center),
-                                            painter = painterResource(id = R.drawable.mouse_ic),
-                                            contentDescription = null
-                                        )
-                                    }
-
-
+                                        Modifier
+                                            .width(1.dp)
+                                            .height(30.dp)
+                                            .background(color = Color.Black) // TODO change to gray
+                                    )
 
                                     textSizeList.forEach { size ->
-                                        Box(
-                                            modifier = Modifier
-                                                .size(30.dp)
-                                                .border(
-                                                    color = Color.Gray,
-                                                    width = 1.dp,
-                                                    shape = shape
+                                        ButtonItem(
+                                            isSelected = currentTextSize.value == size,
+                                            content = { modifier ->
+                                                Text(
+                                                    modifier = modifier,
+                                                    text = "T",
+                                                    fontSize = size.sp
                                                 )
-                                                .background(
-                                                    color = if (currentTextSize.value == size) Color.Gray else Color.White,
-                                                    shape = shape,
-                                                )
-                                                .clickable {
-                                                    currentSize.value = null
-                                                    currentTextSize.value = size
-                                                    selectTool.value = null
-                                                }
+                                            }
                                         ) {
-                                            Text(
-                                                modifier = Modifier.align(Alignment.Center),
-                                                text = "T",
-                                                fontSize = size.sp
-                                            )
+                                            turnTool.invoke(ToolType.Text(size))
                                         }
                                     }
-
-
                                 }
                             }
 
                             item {
 
                                 Row(
-                                    modifier = Modifier.fillMaxWidth(),
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(bottom = 10.dp, top = 7.dp),
                                     horizontalArrangement = Arrangement.spacedBy(10.dp)
                                 ) {
 
                                     sizeList.forEach { size ->
-                                        Box(
-                                            modifier = Modifier
-                                                .size(30.dp)
-                                                .border(
-                                                    color = Color.Gray,
-                                                    width = 1.dp,
-                                                    shape = shape
+
+                                        ButtonItem(
+                                            isSelected = currentSize.value == size,
+                                            content = { modifier ->
+                                                Box(
+                                                    modifier = modifier
+                                                        .size((size * 3).dp)
+                                                        .background(
+                                                            color = Color.Black,
+                                                            shape = CircleShape
+                                                        )
                                                 )
-                                                .background(
-                                                    color = if (currentSize.value == size) Color.Gray else Color.White,
-                                                    shape = shape,
-                                                )
-                                                .clickable {
-                                                    currentTextSize.value = null
-                                                    currentSize.value = size
-                                                    selectTool.value = null
-                                                }
+                                            }
                                         ) {
-                                            Box(
-                                                modifier = Modifier
-                                                    .size((size * 3).dp)
-                                                    .background(
-                                                        color = Color.Black,
-                                                        shape = CircleShape
-                                                    )
-                                                    .align(Alignment.Center)
-                                            )
+                                            turnTool.invoke(ToolType.Line(size))
                                         }
                                     }
 
-                                    colorList.forEachIndexed { index, color ->
+                                    colorList.forEach { color ->
 
-                                        Box(
-                                            modifier = Modifier
-                                                .size(30.dp)
-                                                .border(
-                                                    color = Color.Gray,
-                                                    width = 1.dp,
-                                                    shape = shape
+                                        ButtonItem(
+                                            isSelected = currentColor.value == color,
+                                            content = { modifier ->
+                                                Box(
+                                                    modifier = modifier
+                                                        .size(20.dp)
+                                                        .background(
+                                                            color = color,
+                                                            shape = RoundedCornerShape(4.dp)
+                                                        )
                                                 )
-                                                .background(
-                                                    color = if (currentColor.value == color) Color.Gray else Color.White
-                                                )
-                                                .clickable {
-                                                    currentColor.value = color
-                                                }
+                                            }
                                         ) {
-                                            Box(
-                                                modifier = Modifier
-                                                    .size(20.dp)
-                                                    .background(color = color, shape = shape)
-                                                    .align(Alignment.Center)
+                                            currentColor.value = color
+                                        }
+                                    }
+
+                                    ButtonItem(
+                                        isSelected = afTextTool.value != null,
+                                        content = { modifier ->
+                                            Text(
+                                                modifier = modifier,
+                                                text = "AF",
+                                                fontSize = 20.sp
                                             )
                                         }
+                                    ) {
+                                        turnTool.invoke(ToolType.AfText)
+                                    }
+
+                                    ButtonItem(
+                                        isSelected = straightLine.value != null,
+                                        content = { modifier ->
+                                            Box(
+                                                modifier = modifier
+                                                    .height(3.dp)
+                                                    .width(20.dp)
+                                                    .background(Color.Black)
+                                            )
+                                        }
+                                    ) {
+                                        turnTool.invoke(ToolType.StraightLine)
                                     }
                                 }
                             }
@@ -466,6 +441,8 @@ class MainActivity : ComponentActivity() {
                                         currentTextSize = currentTextSize,
                                         currentText = currentText,
                                         selectTool = selectTool,
+                                        afTextTool = afTextTool,
+                                        straightLine = straightLine,
                                         drawBunch = drawBunch,
                                         setTextDialogIsEnable = {
                                             showDialog = true
@@ -535,6 +512,31 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    @Composable
+    private fun ButtonItem(
+        isSelected: Boolean = false,
+        content: @Composable (modifier: Modifier) -> Unit,
+        onClick: () -> Unit,
+    ) {
+        val shape = MaterialTheme.shapes.small
+        Box(
+            modifier = Modifier
+                .size(30.dp)
+                .border(
+                    color = Color.Gray,
+                    width = 1.dp,
+                    shape = shape
+                )
+                .background(
+                    color = if (isSelected) Color.Gray else Color.White,
+                    shape = shape,
+                )
+                .clickable(onClick = onClick)
+        ) {
+            content.invoke(Modifier.align(Alignment.Center))
+        }
+    }
+
 
     @Composable
     private fun DrawingScreen(
@@ -546,6 +548,8 @@ class MainActivity : ComponentActivity() {
         currentTextSize: MutableState<Int?>,
         currentText: MutableState<String?>,
         selectTool: MutableState<Any?>,
+        afTextTool: MutableState<Any?>,
+        straightLine: MutableState<Any?>,
         setCanvasSize: (canvasSize: Size) -> Unit,
         setTextDialogIsEnable: (Boolean) -> Unit,
         addDrawTextObjectInBunch: (text: DrawText) -> Unit,
@@ -589,260 +593,114 @@ class MainActivity : ComponentActivity() {
                     .pointerInput(true) {
                         detectDragGesturesCustom(
                             onTap = { offset ->
-
-                                if (currentTextSize.value != null) {
-                                    textPosition = offset
-                                    setTextDialogIsEnable.invoke(true)
-                                }
-
-                                if (selectTool.value != null) {
-                                    currentDragObject.clear()
-
-                                    drawBunch.value
-                                        .asReversed()
-                                        .forEach { item ->
-
-                                            val isTouched = isPointInsideDrawObject(
-                                                offset, item, density = density
-                                            )
-
-                                            val corners = isPointInsideResizeHandleDrawObject(
-                                                point = offset,
-                                                item,
-                                                density
-                                            )
-
-                                            if (isTouched || corners != null) {
-
-                                                currentDragObject.add(item)
-
-                                                val (textWidth, textHeight) = getDraggedObjectWidthAndHeight(
-                                                    item,
-                                                    density
-                                                )
-
-                                                val position = when (item.drawObjectType) {
-                                                    DrawMode.Text -> (item as DrawText).position
-                                                    DrawMode.Line -> (item as DrawLine).bounds.bottomLeft
-                                                    DrawMode.Select -> Offset.Zero
-                                                    DrawMode.Clear -> Offset.Zero
-                                                }
-
-                                                val centerPivot = Offset(
-                                                    position.x + textWidth / 2,
-                                                    position.y - textHeight / 2,
-                                                )
-
-                                                Log.d(
-                                                    "check---",
-                                                    "DrawingScreen: centerPivot - $centerPivot"
-                                                )
-
-                                                return@detectDragGesturesCustom
-                                            }
-
-
-                                        }
-                                }
-
-                                Log.d("check---", "DrawingScreen: $offset")
-                            },
-                            onDragStart = { offset ->
-
                                 currentDragObject.clear()
 
-                                if (selectTool.value != null) {
-                                    drawBunch.value
-//                                        .filterList { drawObjectType == DrawMode.Text }
-                                        .asReversed()
-                                        .forEachIndexed { index, item ->
-                                            val isTouched = isPointInsideDrawObject(
-                                                offset, item, density = density
-                                            )
+                                onTab(
+                                    offset = offset,
+                                    density = density,
+                                    selectTool = selectTool,
+                                    currentTextSize = currentTextSize,
+                                    drawBunch = drawBunch,
+                                    setTextDialogIsEnable = setTextDialogIsEnable,
+                                    setTextPosition = { offset ->
+                                        textPosition = offset
+                                    },
+                                    addCurrentDragObject = { offset ->
+                                        currentDragObject.add(offset)
+                                    }
+                                )
+                            },
+                            onDragStart = { offset ->
+                                currentDragObject.clear()
 
-                                            val corner = isPointInsideResizeHandleDrawObject(
-                                                point = offset,
-                                                item,
-                                                density
-                                            )
-
-                                            if (corner != null) {
-                                                currentDragObject.add(item)
-                                                isResizing.value = true
-                                                currentResizeCorner.value = corner
-                                            } else if (isTouched) {
-                                                currentDragObject.add(item)
-
-                                                return@detectDragGesturesCustom
-                                            }
-                                        }
-                                }
+                                onDragStart(
+                                    selectTool = selectTool,
+                                    drawBunch = drawBunch,
+                                    offset = offset,
+                                    density = density,
+                                    initResize = { item, corner ->
+                                        currentDragObject.add(item)
+                                        isResizing.value = true
+                                        currentResizeCorner.value = corner
+                                    },
+                                    addCurrentDragObject = { offset ->
+                                        currentDragObject.add(offset)
+                                    }
+                                )
                             },
                             onDragEnd = {
-                                Log.d("check---", "DrawingScreen: Start end")
+                                completeDrag(
+                                    selectTool = selectTool,
+                                    drawBunch = drawBunch,
+                                    currentDragObject = currentDragObject,
+                                    currentSize = currentSize,
+                                    completionOfDrag = { tempDrawBunch ->
+                                        drawBunch.value = tempDrawBunch
+                                        isResizing.value = false
+                                        currentResizeCorner.value = null
+                                    },
+                                    completeDrawLine = {
+                                        val bounds = calculateBoundingBox(currentLine)
 
-                                if (selectTool.value != null) {
-                                    val tempDrawBunch = drawBunch.value.toMutableList()
-
-                                    currentDragObject.forEach { dragged ->
-
-                                        val item = drawBunch.value.find { dragged.id == it.id }
-                                        val index = drawBunch.value.indexOf(item)
-
-                                        if (index > -1) {
-                                            tempDrawBunch[index] = dragged
-                                        }
-                                    }
-
-                                    drawBunch.value = tempDrawBunch
-                                    isResizing.value = false
-                                    currentResizeCorner.value = null
-                                }
-
-                                if (currentSize.value != null) {
-                                    val bounds = calculateBoundingBox(currentLine)
-
-                                    val drawLine = DrawLine(
-                                        id = drawObjectIdCounter.value,
-                                        list = currentLine.toList(),
-                                        bounds = bounds,
-                                    )
-                                    addDrawLineObjectInBunch.invoke(drawLine)
-                                    currentLine.clear()
-                                }
-
+                                        val drawLine = DrawLine(
+                                            id = drawObjectIdCounter.value,
+                                            list = currentLine.toList(),
+                                            bounds = bounds,
+                                        )
+                                        addDrawLineObjectInBunch.invoke(drawLine)
+                                        currentLine.clear()
+                                    },
+                                )
                             },
                             onDragCancel = {
-                                Log.d("check---", "DrawingScreen: Start cancel")
+                                completeDrag(
+                                    selectTool = selectTool,
+                                    drawBunch = drawBunch,
+                                    currentDragObject = currentDragObject,
+                                    currentSize = currentSize,
+                                    completionOfDrag = { tempDrawBunch ->
+                                        drawBunch.value = tempDrawBunch
+                                        isResizing.value = false
+                                        currentResizeCorner.value = null
+                                    },
+                                    completeDrawLine = {
+                                        val bounds = calculateBoundingBox(currentLine)
 
-                                if (selectTool.value != null) {
-                                    val tempDrawBunch = drawBunch.value.toMutableList()
-
-                                    currentDragObject.forEach { dragged ->
-
-                                        val item = drawBunch.value.find { dragged.id == it.id }
-                                        val index = drawBunch.value.indexOf(item)
-
-                                        if (index > -1) {
-                                            tempDrawBunch[index] = dragged
-                                        }
-                                    }
-
-                                    drawBunch.value = tempDrawBunch
-                                    isResizing.value = false
-                                    currentResizeCorner.value = null
-                                }
-
-                                if (currentSize.value != null) {
-                                    val bounds = calculateBoundingBox(currentLine)
-
-                                    val drawLine = DrawLine(
-                                        id = drawObjectIdCounter.value,
-                                        list = currentLine.toList(),
-                                        bounds = bounds,
-                                    )
-                                    addDrawLineObjectInBunch.invoke(drawLine)
-                                    currentLine.clear()
-                                }
+                                        val drawLine = DrawLine(
+                                            id = drawObjectIdCounter.value,
+                                            list = currentLine.toList(),
+                                            bounds = bounds,
+                                        )
+                                        addDrawLineObjectInBunch.invoke(drawLine)
+                                        currentLine.clear()
+                                    },
+                                )
                             },
                             onDrag = { change, dragAmount ->
                                 change.consume()
-                                if (selectTool.value != null) {
-
-                                    val newList = mutableListOf<DrawObject>()
-
-                                    currentDragObject.forEach { drawObject ->
-                                        val (textWidth, textHeight) = getDraggedObjectWidthAndHeight(
-                                            drawObject,
-                                            density
+                                onDrag(
+                                    selectTool = selectTool,
+                                    currentDragObject = currentDragObject,
+                                    density = density,
+                                    isResizing = isResizing,
+                                    currentResizeCorner = currentResizeCorner,
+                                    change = change,
+                                    currentSize = currentSize,
+                                    updateDragData = { list ->
+                                        currentDragObject.clear()
+                                        currentDragObject.addAll(list)
+                                    },
+                                    addNewLine = {
+                                        val line = Line(
+                                            start = change.position - dragAmount,
+                                            end = change.position,
+                                            color = currentColor.value,
+                                            strokeWidth = with(density) { currentSize.value!!.toDp() }
                                         )
 
-                                        val position = when (drawObject.drawObjectType) {
-                                            DrawMode.Text -> (drawObject as DrawText).position
-                                            DrawMode.Line -> (drawObject as DrawLine).bounds.bottomLeft
-                                            DrawMode.Select -> Offset.Zero
-                                            DrawMode.Clear -> Offset.Zero
-                                        }
-
-
-                                        val centerPivot = Offset(
-                                            position.x + textWidth / 2,
-                                            position.y - textHeight / 2,
-                                        )
-
-                                        if (isResizing.value) {
-                                            val translateMatrix = android.graphics.Matrix()
-
-                                            translateMatrix.postTranslate(
-                                                drawObject.cumulativeTranslationX,
-                                                drawObject.cumulativeTranslationY,
-                                            )
-
-                                            val newPosition = getNewPositionByTranslation(
-                                                position,
-                                                translationMatrix = translateMatrix
-                                            )
-
-                                            val newCenterPoint = Offset(
-                                                newPosition.x + textWidth / 2,
-                                                newPosition.y - textHeight / 2,
-                                            )
-
-                                            val scaleX = when (currentResizeCorner.value) {
-                                                Corner.TopLeft, Corner.BottomLeft -> ((change.position.x) - newCenterPoint.x) / (newPosition.x - newCenterPoint.x)
-                                                Corner.TopRight, Corner.BottomRight -> (change.position.x - newCenterPoint.x) / ((newPosition.x + textWidth) - newCenterPoint.x)
-                                                null -> 1f
-                                            }
-                                            val scaleY = when (currentResizeCorner.value) {
-                                                Corner.TopLeft -> (change.position.y - newCenterPoint.y) / ((newPosition.y - textHeight) - newCenterPoint.y)
-                                                Corner.TopRight -> (change.position.y - newCenterPoint.y) / ((newPosition.y - textHeight) - newCenterPoint.y)
-
-                                                Corner.BottomRight, Corner.BottomLeft -> (((change.position.y) - newCenterPoint.y)) / (newPosition.y - newCenterPoint.y)
-                                                null -> 1f
-                                            }
-
-                                            drawObject.cumulativeScaleX = scaleX
-                                            drawObject.cumulativeScaleY = scaleY
-                                        } else {
-                                            drawObject.cumulativeTranslationX =
-                                                (change.position.x - position.x) - textWidth / 2
-                                            drawObject.cumulativeTranslationY =
-                                                (change.position.y - position.y) + textHeight / 2
-                                        }
-
-                                        val matrix = android.graphics.Matrix()
-
-                                        matrix.setScale(
-                                            drawObject.cumulativeScaleX,
-                                            drawObject.cumulativeScaleY,
-                                            centerPivot.x,
-                                            centerPivot.y
-                                        )
-
-                                        matrix.postTranslate(
-                                            drawObject.cumulativeTranslationX,
-                                            drawObject.cumulativeTranslationY,
-                                        )
-
-                                        drawObject.transformMatrix = matrix
-
-                                        newList.add(drawObject)
+                                        currentLine.add(line)
                                     }
-
-                                    currentDragObject.clear()
-                                    currentDragObject.addAll(newList)
-                                }
-
-                                if (currentSize.value != null) {
-                                    val line = Line(
-                                        start = change.position - dragAmount,
-                                        end = change.position,
-                                        color = currentColor.value,
-                                        strokeWidth = currentSize.value!!.toDp()
-                                    )
-
-                                    currentLine.add(line)
-                                }
+                                )
                             }
                         )
                     }
@@ -854,253 +712,17 @@ class MainActivity : ComponentActivity() {
                     canvasSizeInvokeFlag = true
                 }
 
-                drawIntoCanvas { canvas ->
-                    val dest = Rect(0, 0, canvasSize.width.toInt(), canvasSize.height.toInt())
-                    val paint = Paint()
-                    paint.isFilterBitmap = true
-                    canvas.nativeCanvas.drawBitmap(image.asAndroidBitmap(), null, dest, paint)
+                drawBackGroundImage(canvasSize, image)
 
-                }
+                drawStaticDrawObject(drawBunch, currentDragObject, density)
 
-                drawBunch.value.forEachIndexed { index, bunch ->
+                drawCurrentDrawLine(currentLine)
 
-                    if (currentDragObject.map { it.id }.contains(bunch.id)) {
-                        return@forEachIndexed
-                    }
-
-
-                    when (bunch.drawObjectType) {
-                        DrawMode.Text -> {
-                            val textObject = (bunch as DrawText)
-
-                            drawIntoCanvas { canvas ->
-                                val paint = Paint().apply {
-                                    color = textObject.color.toArgb()
-                                    textSize = textObject.fontSize.sp.toPx()
-                                }
-                                val textBounds = Rect()
-
-                                paint.getTextBounds(
-                                    textObject.text,
-                                    0,
-                                    textObject.text.length,
-                                    textBounds
-                                )
-
-                                canvas.save()
-                                canvas.nativeCanvas.concat(textObject.transformMatrix)
-
-                                canvas.nativeCanvas.drawText(
-                                    textObject.text,
-                                    textObject.position.x,
-                                    textObject.position.y,
-                                    paint
-                                )
-
-                                canvas.nativeCanvas.restore()
-                            }
-                        }
-
-                        DrawMode.Line -> {
-
-                            val drawLine = (bunch as DrawLine)
-
-                            drawIntoCanvas { canvas ->
-                                val paint = Paint()
-
-                                canvas.save()
-                                canvas.nativeCanvas.concat(drawLine.transformMatrix)
-                                drawLine.list.forEach { line ->
-                                    paint.color = line.color.toArgb()
-                                    paint.strokeWidth = with(density) { line.strokeWidth.toPx() }
-                                    paint.strokeCap = Paint.Cap.ROUND
-
-
-                                    canvas.nativeCanvas.drawLine(
-                                        line.start.x,
-                                        line.start.y,
-                                        line.end.x,
-                                        line.end.y,
-                                        paint
-                                    )
-                                }
-
-                                canvas.nativeCanvas.restore()
-                            }
-                        }
-
-                        DrawMode.Select, DrawMode.Clear -> {}
-                    }
-                }
-
-                currentLine.forEach { line ->
-                    drawLine(
-                        color = line.color,
-                        start = line.start,
-                        end = line.end,
-                        strokeWidth = line.strokeWidth.toPx(),
-                        cap = StrokeCap.Round
-                    )
-                }
-
-                currentDragObject.forEach { dragObject ->
-
-                    val (textWidth, textHeight) = getDraggedObjectWidthAndHeight(
-                        dragObject,
-                        density
-                    )
-
-                    when (dragObject.drawObjectType) {
-                        DrawMode.Text -> {
-                            val dragText = (dragObject as DrawText)
-
-
-
-                            drawIntoCanvas { canvas ->
-                                val paint = Paint().apply {
-                                    color = dragText.color.toArgb()
-                                    textSize = dragText.fontSize.sp.toPx()
-                                }
-
-                                canvas.save()
-                                canvas.nativeCanvas.concat(dragText.transformMatrix)
-
-                                canvas.nativeCanvas.drawText(
-                                    dragText.text,
-                                    dragText.position.x,
-                                    dragText.position.y,
-                                    paint
-                                )
-
-                                val boundsPosition = Offset(
-                                    x = dragText.position.x,
-                                    y = dragText.position.y - textHeight
-                                )
-
-                                val topLeft = boundsPosition
-                                val topRight =
-                                    Offset(boundsPosition.x + textWidth, boundsPosition.y)
-                                val bottomRight = Offset(
-                                    boundsPosition.x + textWidth,
-                                    boundsPosition.y + textHeight.toFloat()
-                                )
-                                val bottomLeft =
-                                    Offset(
-                                        boundsPosition.x,
-                                        boundsPosition.y + textHeight.toFloat()
-                                    )
-
-                                drawRectangleByOffsets(
-                                    canvas.nativeCanvas,
-                                    topLeft,
-                                    topRight,
-                                    bottomRight,
-                                    bottomLeft,
-                                    paint
-                                )
-
-                                canvas.nativeCanvas.restore()
-                            }
-
-                            if (!isResizing.value) {
-                                drawIntoCanvas { canvas ->
-
-                                    val originalBottomLeft = dragText.position
-                                    val originalTopRight = Offset(
-                                        originalBottomLeft.x + textWidth,
-                                        originalBottomLeft.y - textHeight
-                                    )
-
-                                    val bottomLeft = getNewPositionByTranslation(
-                                        originalBottomLeft, dragText.transformMatrix
-                                    )
-
-                                    val topRight = getNewPositionByTranslation(
-                                        originalTopRight, dragText.transformMatrix
-                                    )
-
-                                    drawResizeHandles(
-                                        canvas = canvas.nativeCanvas,
-                                        bottomLeft = bottomLeft,
-                                        topRight = topRight,
-                                        resizeHandleSize = 20.dp,
-                                    )
-                                }
-                            }
-                        }
-
-                        DrawMode.Line -> {
-                            val dragLine = (dragObject as DrawLine)
-
-                            drawIntoCanvas { canvas ->
-                                val paint = Paint()
-
-                                canvas.save()
-                                canvas.nativeCanvas.concat(dragLine.transformMatrix)
-                                dragLine.list.forEach { line ->
-                                    paint.color = line.color.toArgb()
-                                    paint.strokeWidth = with(density) { line.strokeWidth.toPx() }
-                                    paint.strokeCap = Paint.Cap.ROUND
-
-
-                                    canvas.nativeCanvas.drawLine(
-                                        line.start.x,
-                                        line.start.y,
-                                        line.end.x,
-                                        line.end.y,
-                                        paint
-                                    )
-                                }
-
-                                val boundingBoxPaint = Paint().apply {
-                                    color = android.graphics.Color.BLACK
-                                    style = Paint.Style.STROKE
-                                    strokeWidth = 1f
-                                }
-
-                                drawBoundingBox(
-                                    canvas = canvas.nativeCanvas,
-                                    position = dragLine.bounds.bottomLeft,
-                                    size = Offset(dragLine.bounds.width, -dragLine.bounds.height),
-                                    paint = boundingBoxPaint,
-                                )
-
-                                canvas.nativeCanvas.restore()
-                            }
-
-                            if (!isResizing.value) {
-                                drawIntoCanvas { canvas ->
-
-                                    val originalBottomLeft = dragLine.bounds.bottomLeft
-                                    val originalTopRight = Offset(
-                                        originalBottomLeft.x + textWidth,
-                                        originalBottomLeft.y - textHeight
-                                    )
-
-                                    val bottomLeft = getNewPositionByTranslation(
-                                        originalBottomLeft, dragLine.transformMatrix
-                                    )
-
-                                    val topRight = getNewPositionByTranslation(
-                                        originalTopRight, dragLine.transformMatrix
-                                    )
-
-                                    drawResizeHandles(
-                                        canvas = canvas.nativeCanvas,
-                                        bottomLeft = bottomLeft,
-                                        topRight = topRight,
-                                        resizeHandleSize = 20.dp,
-                                    )
-                                }
-                            }
-                        }
-
-                        DrawMode.Select, DrawMode.Clear -> {}
-                    }
-                }
+                drawCurrentGragAndMoveDrawObjects(currentDragObject, density, isResizing)
             }
         }
     }
+
 
     @Composable
     private fun LaunchedEffects(
@@ -1137,176 +759,15 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    private fun createBitmapFromLines(
-        image: ImageBitmap,
-        canvasWidth: Float,
-        canvasHeight: Float,
-        drawBunch: DrawBunch,
-        density: Density,
-    ): Bitmap {
-        val bitmap = Bitmap.createBitmap(
-            canvasWidth.toInt(),
-            canvasHeight.toInt(),
-            Bitmap.Config.ARGB_8888
-        )
-        val canvas = AndroidCanvas(bitmap)
-        val paint = Paint()
-
-        val dest = Rect(0, 0, canvasWidth.toInt(), canvasHeight.toInt())
-        paint.isFilterBitmap = true
-        canvas.drawBitmap(image.asAndroidBitmap(), null, dest, paint)
-
-        drawBunch.forEach { bunch ->
-
-            when (bunch.drawObjectType) {
-                DrawMode.Text -> {
-                    val textObject = (bunch as DrawText)
-
-                    paint.color = textObject.color.toArgb()
-                    paint.textSize = with(density) { textObject.fontSize.sp.toPx() }
-                    canvas.save()
-                    canvas.concat(textObject.transformMatrix)
-                    canvas.drawText(
-                        textObject.text,
-                        textObject.position.x,
-                        textObject.position.y,
-                        paint
-                    )
-                    canvas.restore()
-                }
-
-                DrawMode.Line -> {
-                    (bunch as DrawLine).list.forEach { line ->
-                        paint.color = line.color.toArgb()
-                        paint.strokeWidth = with(density) { line.strokeWidth.toPx() }
-                        paint.strokeCap = Paint.Cap.ROUND
-                        canvas.save()
-                        canvas.concat(bunch.transformMatrix)
-
-//                        val matrix = Matrix()
-//                        matrix.setScale(scaleX, scaleY)
-
-//                        canvas.concat(matrix)
-                        canvas.drawLine(
-                            line.start.x,
-                            line.start.y,
-                            line.end.x,
-                            line.end.y,
-                            paint
-                        )
-                        canvas.restore()
-                    }
-                }
-
-                DrawMode.Select, DrawMode.Clear -> {}
-            }
-        }
-
-        return bitmap
-    }
-
-
-    fun Color.toArgb(): Int {
-        return AndroidColor.argb(
-            (alpha * 255).toInt(),
-            (red * 255).toInt(),
-            (green * 255).toInt(),
-            (blue * 255).toInt()
-        )
-    }
-
-    private fun drawResizeHandles(
-        canvas: android.graphics.Canvas,
-        bottomLeft: Offset,
-        topRight: Offset,
-        resizeHandleSize: Dp
-    ) {
-        val halfResizeHandleSize = resizeHandleSize.value / 2
-        val topLeftRect =
-            Offset(bottomLeft.x - halfResizeHandleSize, topRight.y - halfResizeHandleSize)
-        val topRightRect =
-            Offset(topRight.x - halfResizeHandleSize, topRight.y - halfResizeHandleSize)
-        val bottomLeftRect =
-            Offset(bottomLeft.x - halfResizeHandleSize, bottomLeft.y - halfResizeHandleSize)
-        val bottomRightRect = Offset(
-            topRight.x - halfResizeHandleSize,
-            bottomLeft.y - halfResizeHandleSize
-        )
-
-        val paint = Paint().apply {
-            color = Color.Black.toArgb()
-            style = Paint.Style.FILL
-        }
-
-        // Draw resize handles
-        canvas.drawRect(
-            topLeftRect.x,
-            topLeftRect.y,
-            topLeftRect.x + resizeHandleSize.value,
-            topLeftRect.y + resizeHandleSize.value,
-            paint
-        )
-        canvas.drawRect(
-            topRightRect.x,
-            topRightRect.y,
-            topRightRect.x + resizeHandleSize.value,
-            topRightRect.y + resizeHandleSize.value,
-            paint
-        )
-        canvas.drawRect(
-            bottomLeftRect.x,
-            bottomLeftRect.y,
-            bottomLeftRect.x + resizeHandleSize.value,
-            bottomLeftRect.y + resizeHandleSize.value,
-            paint
-        )
-        canvas.drawRect(
-            bottomRightRect.x,
-            bottomRightRect.y,
-            bottomRightRect.x + resizeHandleSize.value,
-            bottomRightRect.y + resizeHandleSize.value,
-            paint
-        )
-    }
 }
 
-fun drawBoundingBox(
-    canvas: android.graphics.Canvas,
-    position: Offset,
-    size: Offset,
-    paint: Paint
-) {
-    canvas.drawRect(
-        position.x,
-        position.y,
-        position.x + size.x,
-        position.y + size.y,
-        paint
-    )
+sealed class ToolType {
+    data class Text(val textSize: Int) : ToolType()
+    object AfText : ToolType()
+    data class Line(val lineSize: Int) : ToolType()
+    object StraightLine : ToolType()
+    object Select : ToolType()
 }
-
-fun drawRectangleByOffsets(
-    canvas: android.graphics.Canvas,
-    topLeft: Offset,
-    topRight: Offset,
-    bottomRight: Offset,
-    bottomLeft: Offset,
-    paint: Paint
-) {
-    canvas.drawLine(topLeft.x, topLeft.y, topRight.x, topRight.y, paint)
-    canvas.drawLine(topRight.x, topRight.y, bottomRight.x, bottomRight.y, paint)
-    canvas.drawLine(bottomRight.x, bottomRight.y, bottomLeft.x, bottomLeft.y, paint)
-    canvas.drawLine(bottomLeft.x, bottomLeft.y, topLeft.x, topLeft.y, paint)
-}
-
-
-enum class DrawMode {
-    Text,
-    Line,
-    Select,
-    Clear,
-}
-
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable

@@ -6,6 +6,14 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 
+enum class DrawMode {
+    Text,
+    Line,
+    Select,
+    Clear,
+}
+
+
 interface DrawObject {
     val id: Int
     val drawObjectType: DrawMode
