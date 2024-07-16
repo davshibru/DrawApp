@@ -36,106 +36,6 @@ import kotlin.math.PI
 import kotlin.math.abs
 import kotlin.math.sign
 
-fun drawToBitmap(bitmap: ImageBitmap): ImageBitmap {
-    val drawScope = CanvasDrawScope()
-    val size = Size(400f, 400f) // simple example of 400px by 400px image
-
-//    val bitmap = ImageBitmap(size.width.toInt(), size.height.toInt())
-    val canvas = Canvas(bitmap)
-
-    drawScope.draw(
-        density = Density(1f),
-        layoutDirection = LayoutDirection.Ltr,
-        canvas = canvas,
-        size = size,
-    ) {
-        // Draw whatever you want here; for instance, a white background and a red line.
-        drawRect(color = Color.Transparent, topLeft = Offset.Zero, size = size)
-        drawLine(
-            color = Color.Red,
-            start = Offset.Zero,
-            end = Offset(size.width, size.height),
-            strokeWidth = 5f
-        )
-    }
-    return bitmap
-}
-
-
-suspend fun PointerInputScope.detectAdvancedVerticalDragGestures(
-    panZoomLock: Boolean = false,
-    touchCount: (touchCount: Int) -> Unit,
-    onGesture: (centroid: Offset, pan: Offset, zoom: Float, rotation: Float) -> Unit,
-) {
-    awaitEachGesture {
-        var rotation = 0f
-        var zoom = 1f
-        var pan = Offset.Zero
-        var pastTouchSlop = false
-        val touchSlop = viewConfiguration.touchSlop
-        var lockedToPanZoom = false
-
-        awaitFirstDown(requireUnconsumed = false)
-        do {
-            val event = awaitPointerEvent()
-
-            touchCount(event.changes.count())
-
-            val canceled = event.changes.any { it.isConsumed }
-            if (!canceled) {
-                val zoomChange = event.calculateZoom()
-                val rotationChange = event.calculateRotation()
-                val panChange = event.calculatePan()
-
-                if (!pastTouchSlop) {
-                    zoom *= zoomChange
-                    rotation += rotationChange
-                    pan += panChange
-
-                    val centroidSize = event.calculateCentroidSize(useCurrent = false)
-                    val zoomMotion = abs(1 - zoom) * centroidSize
-                    val rotationMotion = abs(rotation * PI.toFloat() * centroidSize / 180f)
-                    val panMotion = pan.getDistance()
-
-                    if (zoomMotion > touchSlop ||
-                        rotationMotion > touchSlop ||
-                        panMotion > touchSlop
-                    ) {
-                        pastTouchSlop = true
-                        lockedToPanZoom = panZoomLock && rotationMotion < touchSlop
-                    }
-                }
-
-                if (pastTouchSlop) {
-                    val centroid = event.calculateCentroid(useCurrent = false)
-                    val effectiveRotation = if (lockedToPanZoom) 0f else rotationChange
-                    if (effectiveRotation != 0f ||
-                        zoomChange != 1f ||
-                        panChange != Offset.Zero
-                    ) {
-                        onGesture(centroid, panChange, zoomChange, effectiveRotation)
-                    }
-                    event.changes.forEach {
-                        if (it.positionChanged()) {
-                            it.consume()
-                        }
-                    }
-                }
-            } else {
-                touchCount(0)
-            }
-        } while (!canceled && event.changes.any { it.pressed })
-    }
-}
-
-internal suspend fun PointerInputScope.detectTap(
-    onTap: (Offset) -> Unit
-) {
-    awaitEachGesture {
-
-    }
-}
-
 suspend fun PointerInputScope.detectDragGesturesCustom(
     onTap: (Offset) -> Unit,
     onDragStart: (Offset) -> Unit = { },
@@ -336,60 +236,6 @@ fun getTextWidthAndHeight(textItem: DrawText, density: Density): Pair<Float, Flo
     return Pair(textWidth, textHeight.toFloat())
 }
 
-fun getTextWidthAndHeightM(
-    textItem: DrawText,
-    density: Density,
-    transformMatrix: Matrix
-): Pair<Float, Float> {
-    val position = textItem.position
-
-    val textBounds = Rect()
-    val paint = Paint().apply {
-        textSize = with(density) { textItem.fontSize.dp.toPx() }
-    }
-    paint.getTextBounds(textItem.text, 0, textItem.text.length, textBounds)
-    val textWidth = paint.measureText(textItem.text)
-    val textHeight = textBounds.height()
-
-    val topRight = floatArrayOf(position.x + textWidth, position.y - textHeight)
-    val bottomLeft = floatArrayOf(position.x, position.y)
-
-    // Apply the transformation matrix
-    transformMatrix.mapPoints(topRight)
-    transformMatrix.mapPoints(bottomLeft)
-
-    val xRange = floatArrayOf(bottomLeft[0], topRight[0])
-    xRange.sort()
-
-    val yRange = floatArrayOf(bottomLeft[1], topRight[1])
-    yRange.sort()
-
-    return Pair(xRange[1] - xRange[0], yRange[1] - yRange[0])
-}
-
-fun getNewPosition(textItem: DrawText, density: Density): Offset {
-    val position = textItem.position
-
-    val bottomLeft = floatArrayOf(position.x, position.y)
-
-    textItem.transformMatrix.mapPoints(bottomLeft)
-
-    return Offset(bottomLeft[0], bottomLeft[1])
-}
-
-fun getNewPositionByTranslation(
-    textItem: DrawText,
-    density: Density,
-    translationMatrix: Matrix
-): Offset {
-    val position = textItem.position
-
-    val bottomLeft = floatArrayOf(position.x, position.y)
-
-    translationMatrix.mapPoints(bottomLeft)
-
-    return Offset(bottomLeft[0], bottomLeft[1])
-}
 
 fun getNewPositionByTranslation(point: Offset, translationMatrix: Matrix): Offset {
     val bottomLeft = floatArrayOf(point.x, point.y)
@@ -397,17 +243,6 @@ fun getNewPositionByTranslation(point: Offset, translationMatrix: Matrix): Offse
     translationMatrix.mapPoints(bottomLeft)
 
     return Offset(bottomLeft[0], bottomLeft[1])
-}
-
-fun inverseMapPoint(matrix: Matrix, point: FloatArray): FloatArray {
-    val inverseMatrix = Matrix()
-    if (matrix.invert(inverseMatrix)) {
-        val mappedPoint = FloatArray(2)
-        inverseMatrix.mapPoints(mappedPoint, point)
-        return mappedPoint
-    } else {
-        throw IllegalArgumentException("Matrix inversion failed")
-    }
 }
 
 fun isPointInsideResizeHandleDrawObject(
@@ -436,14 +271,12 @@ fun isPointInsideResizeHandleLine(
     val bottomRight = boundingBox.bottomRight.toFloatArray()
     val bottomLeft = boundingBox.bottomLeft.toFloatArray()
 
-    Log.d("check---", "isPointInsideResizeHandleLine: bottomLeft - ${boundingBox.bottomLeft}")
-
     transformMatrix.mapPoints(topLeft)
     transformMatrix.mapPoints(topRight)
     transformMatrix.mapPoints(bottomRight)
     transformMatrix.mapPoints(bottomLeft)
 
-    val radius = 20
+    val radius = 40
 
     if (Offset(topLeft[0], topLeft[1]).minus(point).getDistanceSquared() < radius * radius) {
         return Corner.TopLeft
