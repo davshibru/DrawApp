@@ -251,6 +251,13 @@ fun calculateBoundingBox(lines: List<Line>): CustomRect {
         if (line.end.y > maxY) maxY = line.end.y
     }
 
+    val bonusArea = 20
+
+    minX -= bonusArea
+    maxY += bonusArea
+    maxX += bonusArea
+    minY -= bonusArea
+
     return CustomRect(Offset(minX, maxY), Offset(maxX, minY))
 }
 

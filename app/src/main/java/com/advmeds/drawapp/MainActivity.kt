@@ -3,6 +3,7 @@ package com.advmeds.drawapp
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.os.Bundle
+import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.Canvas
@@ -46,6 +47,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
@@ -590,6 +592,7 @@ class MainActivity : ComponentActivity() {
             Canvas(
                 modifier = Modifier
                     .size(width, height)
+                    .clipToBounds()
                     .pointerInput(true) {
                         detectDragGesturesCustom(
                             onTap = { offset ->
@@ -599,10 +602,51 @@ class MainActivity : ComponentActivity() {
                                     offset = offset,
                                     density = density,
                                     selectTool = selectTool,
+                                    afTextTool = afTextTool,
+                                    straightLine = straightLine,
                                     currentTextSize = currentTextSize,
                                     drawBunch = drawBunch,
                                     setTextDialogIsEnable = setTextDialogIsEnable,
-                                    setTextPosition = { offset ->
+                                    addAfText = {
+                                        val drawText = DrawText(
+                                            id = drawObjectIdCounter.value,
+                                            text = "AF",
+                                            color = currentColor.value,
+                                            position = offset,
+                                            fontSize = 25
+                                        )
+
+                                        addDrawTextObjectInBunch.invoke(drawText)
+                                    },
+                                    addStraightLine = {
+                                        currentLine.clear()
+                                        val firstLine = Line(
+                                            start = Offset(991.4f, 231.0f),
+                                            end =Offset(1020.1f, 231.0f),
+                                            color = currentColor.value,
+                                            strokeWidth = 7.dp
+                                        )
+
+                                        currentLine.add(firstLine)
+
+                                        val secondLine = Line(
+                                            start = Offset(1000.1f, 231.0f),
+                                            end = Offset(1050.9f, 231.0f),
+                                            color = currentColor.value,
+                                            strokeWidth = 7.dp
+                                        )
+//                                        currentLine.add(secondLine)
+                                        val bounds = calculateBoundingBox(currentLine)
+
+                                        val drawLine = DrawLine(
+                                            id = drawObjectIdCounter.value,
+                                            list = currentLine.toList(),
+                                            bounds = bounds,
+                                        )
+                                        addDrawLineObjectInBunch.invoke(drawLine)
+                                        currentLine.clear()
+                                    },
+                                    setTextPosition = {
                                         textPosition = offset
                                     },
                                     addCurrentDragObject = { offset ->
@@ -623,8 +667,8 @@ class MainActivity : ComponentActivity() {
                                         isResizing.value = true
                                         currentResizeCorner.value = corner
                                     },
-                                    addCurrentDragObject = { offset ->
-                                        currentDragObject.add(offset)
+                                    addCurrentDragObject = { dragObject ->
+                                        currentDragObject.add(dragObject)
                                     }
                                 )
                             },
@@ -640,6 +684,7 @@ class MainActivity : ComponentActivity() {
                                         currentResizeCorner.value = null
                                     },
                                     completeDrawLine = {
+                                        Log.d("check---", "DrawingScreen: ${currentLine.toList().map { it.start to it.end }}")
                                         val bounds = calculateBoundingBox(currentLine)
 
                                         val drawLine = DrawLine(
@@ -695,7 +740,7 @@ class MainActivity : ComponentActivity() {
                                             start = change.position - dragAmount,
                                             end = change.position,
                                             color = currentColor.value,
-                                            strokeWidth = with(density) { currentSize.value!!.toDp() }
+                                            strokeWidth = currentSize.value!!.dp
                                         )
 
                                         currentLine.add(line)

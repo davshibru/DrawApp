@@ -1,6 +1,7 @@
 package com.advmeds.drawapp
 
 import android.graphics.Matrix
+import android.util.Log
 import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.snapshots.SnapshotStateList
 import androidx.compose.ui.geometry.Offset
@@ -12,14 +13,26 @@ fun onTab(
     density: Density,
     currentTextSize: MutableState<Int?>,
     selectTool: MutableState<Any?>,
+    afTextTool: MutableState<Any?>,
+    straightLine: MutableState<Any?>,
     setTextDialogIsEnable: (Boolean) -> Unit,
     drawBunch: MutableState<DrawBunch>,
-    setTextPosition: (Offset) -> Unit,
-    addCurrentDragObject: (DrawObject) -> Unit
+    addAfText: () -> Unit,
+    addStraightLine: () -> Unit,
+    setTextPosition: () -> Unit,
+    addCurrentDragObject: (DrawObject) -> Unit,
 ) {
     if (currentTextSize.value != null) {
-        setTextPosition.invoke(offset)
+        setTextPosition.invoke()
         setTextDialogIsEnable.invoke(true)
+    }
+
+    if (afTextTool.value != null) {
+        addAfText.invoke()
+    }
+
+    if (straightLine.value != null) {
+        addStraightLine.invoke()
     }
 
     if (selectTool.value != null) {
@@ -52,26 +65,32 @@ fun onDragStart(
     initResize: (item: DrawObject, corner: Corner?) -> Unit,
     addCurrentDragObject: (DrawObject) -> Unit
 ) {
+
+
+//    Log.d("check---", "onDragStart: (selectTool.value  ${selectTool.value}")
+
     if (selectTool.value != null) {
+
+//        Log.d("check---", "onDragStart: drawBunch  ${drawBunch.value}")
         drawBunch.value
             .asReversed()
             .forEach { item ->
                 val isTouched = isPointInsideDrawObject(
-                    offset, item, density = density
+                    point = offset, drawObject = item, density = density
                 )
 
                 val corner = isPointInsideResizeHandleDrawObject(
                     point = offset,
-                    item,
-                    density
+                    dragObject = item,
+                    density = density
                 )
+
+//                Log.d("check---", "onDragStart: isTouched $isTouched corner - $corner")
 
                 if (corner != null) {
                     initResize.invoke(item, corner)
                 } else if (isTouched) {
                     addCurrentDragObject.invoke(item)
-
-
                 }
 
                 return

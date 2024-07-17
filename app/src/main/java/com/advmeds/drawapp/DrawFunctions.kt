@@ -137,8 +137,6 @@ fun DrawScope.drawCurrentGragAndMoveDrawObjects(
             DrawMode.Text -> {
                 val dragText = (dragObject as DrawText)
 
-
-
                 drawIntoCanvas { canvas ->
                     val paint = Paint().apply {
                         color = dragText.color.toArgb()
@@ -154,62 +152,16 @@ fun DrawScope.drawCurrentGragAndMoveDrawObjects(
                         dragText.position.y,
                         paint
                     )
-
-                    val boundsPosition = Offset(
-                        x = dragText.position.x,
-                        y = dragText.position.y - textHeight
-                    )
-
-                    val topLeft = boundsPosition
-                    val topRight =
-                        Offset(boundsPosition.x + textWidth, boundsPosition.y)
-                    val bottomRight = Offset(
-                        boundsPosition.x + textWidth,
-                        boundsPosition.y + textHeight.toFloat()
-                    )
-                    val bottomLeft =
-                        Offset(
-                            boundsPosition.x,
-                            boundsPosition.y + textHeight.toFloat()
-                        )
-
-                    drawRectangleByOffsets(
-                        canvas.nativeCanvas,
-                        topLeft,
-                        topRight,
-                        bottomRight,
-                        bottomLeft,
-                        paint
-                    )
-
                     canvas.nativeCanvas.restore()
                 }
-
-                if (!isResizing.value) {
-                    drawIntoCanvas { canvas ->
-
-                        val originalBottomLeft = dragText.position
-                        val originalTopRight = Offset(
-                            originalBottomLeft.x + textWidth,
-                            originalBottomLeft.y - textHeight
-                        )
-
-                        val bottomLeft = getNewPositionByTranslation(
-                            originalBottomLeft, dragText.transformMatrix
-                        )
-
-                        val topRight = getNewPositionByTranslation(
-                            originalTopRight, dragText.transformMatrix
-                        )
-
-                        drawResizeHandles(
-                            canvas = canvas.nativeCanvas,
-                            bottomLeft = bottomLeft,
-                            topRight = topRight,
-                            resizeHandleSize = 20.dp,
-                        )
-                    }
-                }
+                val originalBottomLeft = dragText.position
+                drawCornerRectAndAreaRect(
+                    originalBottomLeft = originalBottomLeft,
+                    textWidth = textWidth,
+                    textHeight = textHeight,
+                    dragObject = dragText,
+                    isResizing = isResizing
+                )
             }
 
             DrawMode.Line -> {
@@ -235,51 +187,69 @@ fun DrawScope.drawCurrentGragAndMoveDrawObjects(
                         )
                     }
 
-                    val boundingBoxPaint = Paint().apply {
-                        color = android.graphics.Color.BLACK
-                        style = Paint.Style.STROKE
-                        strokeWidth = 1f
-                    }
-
-                    drawBoundingBox(
-                        canvas = canvas.nativeCanvas,
-                        position = dragLine.bounds.bottomLeft,
-                        size = Offset(dragLine.bounds.width, -dragLine.bounds.height),
-                        paint = boundingBoxPaint,
-                    )
-
                     canvas.nativeCanvas.restore()
                 }
 
-                if (!isResizing.value) {
-                    drawIntoCanvas { canvas ->
+                val originalBottomLeft = dragLine.bounds.bottomLeft
 
-                        val originalBottomLeft = dragLine.bounds.bottomLeft
-                        val originalTopRight = Offset(
-                            originalBottomLeft.x + textWidth,
-                            originalBottomLeft.y - textHeight
-                        )
-
-                        val bottomLeft = getNewPositionByTranslation(
-                            originalBottomLeft, dragLine.transformMatrix
-                        )
-
-                        val topRight = getNewPositionByTranslation(
-                            originalTopRight, dragLine.transformMatrix
-                        )
-
-                        drawResizeHandles(
-                            canvas = canvas.nativeCanvas,
-                            bottomLeft = bottomLeft,
-                            topRight = topRight,
-                            resizeHandleSize = 20.dp,
-                        )
-                    }
-                }
+                drawCornerRectAndAreaRect(
+                    originalBottomLeft = originalBottomLeft,
+                    textWidth = textWidth,
+                    textHeight = textHeight,
+                    dragObject = dragLine,
+                    isResizing = isResizing
+                )
             }
 
             DrawMode.Select, DrawMode.Clear -> {}
         }
+    }
+}
+
+private fun DrawScope.drawCornerRectAndAreaRect(
+    originalBottomLeft: Offset,
+    textWidth: Float,
+    textHeight: Float,
+    dragObject: DrawObject,
+    isResizing: MutableState<Boolean>
+) {
+    val originalTopRight = Offset(
+        originalBottomLeft.x + textWidth,
+        originalBottomLeft.y - textHeight
+    )
+
+    val bottomLeft = getNewPositionByTranslation(
+        originalBottomLeft, dragObject.transformMatrix
+    )
+
+    val topRight = getNewPositionByTranslation(
+        originalTopRight, dragObject.transformMatrix
+    )
+
+    if (!isResizing.value) {
+        drawIntoCanvas { canvas ->
+            drawResizeHandles(
+                canvas = canvas.nativeCanvas,
+                bottomLeft = bottomLeft,
+                topRight = topRight,
+                resizeHandleSize = 20.dp,
+            )
+        }
+    }
+
+    val boundingBoxPaint = Paint().apply {
+        color = android.graphics.Color.BLACK
+        style = Paint.Style.STROKE
+        strokeWidth = 1f
+    }
+
+    drawIntoCanvas { canvas ->
+        drawBoundingBoxByPositions(
+            canvas = canvas.nativeCanvas,
+            bottomLeft = bottomLeft,
+            topRight = topRight,
+            paint = boundingBoxPaint,
+        )
     }
 }
 
@@ -295,6 +265,21 @@ fun drawBoundingBox(
         position.y,
         position.x + size.x,
         position.y + size.y,
+        paint
+    )
+}
+
+fun drawBoundingBoxByPositions(
+    canvas: android.graphics.Canvas,
+    bottomLeft: Offset,
+    topRight: Offset,
+    paint: Paint,
+) {
+    canvas.drawRect(
+        bottomLeft.x,
+        bottomLeft.y,
+        topRight.x,
+        topRight.y,
         paint
     )
 }
