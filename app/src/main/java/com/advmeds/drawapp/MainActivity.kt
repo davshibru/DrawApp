@@ -620,22 +620,18 @@ class MainActivity : ComponentActivity() {
                                     },
                                     addStraightLine = {
                                         currentLine.clear()
-                                        val firstLine = Line(
-                                            start = Offset(991.4f, 231.0f),
-                                            end =Offset(1020.1f, 231.0f),
+
+                                        val line = Line(
+                                            start = offset,
+                                            end = offset.copy(
+                                                x = offset.x + 50f
+                                            ),
                                             color = currentColor.value,
                                             strokeWidth = 7.dp
                                         )
 
-                                        currentLine.add(firstLine)
+                                        currentLine.add(line)
 
-                                        val secondLine = Line(
-                                            start = Offset(1000.1f, 231.0f),
-                                            end = Offset(1050.9f, 231.0f),
-                                            color = currentColor.value,
-                                            strokeWidth = 7.dp
-                                        )
-//                                        currentLine.add(secondLine)
                                         val bounds = calculateBoundingBox(currentLine)
 
                                         val drawLine = DrawLine(
@@ -649,8 +645,8 @@ class MainActivity : ComponentActivity() {
                                     setTextPosition = {
                                         textPosition = offset
                                     },
-                                    addCurrentDragObject = { offset ->
-                                        currentDragObject.add(offset)
+                                    addCurrentDragObject = { drawObject ->
+                                        currentDragObject.add(drawObject)
                                     }
                                 )
                             },
@@ -684,7 +680,6 @@ class MainActivity : ComponentActivity() {
                                         currentResizeCorner.value = null
                                     },
                                     completeDrawLine = {
-                                        Log.d("check---", "DrawingScreen: ${currentLine.toList().map { it.start to it.end }}")
                                         val bounds = calculateBoundingBox(currentLine)
 
                                         val drawLine = DrawLine(
