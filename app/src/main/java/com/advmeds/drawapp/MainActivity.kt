@@ -3,7 +3,6 @@ package com.advmeds.drawapp
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.os.Bundle
-import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.Canvas
@@ -59,6 +58,7 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.advmeds.drawapp.ui.theme.DrawAppTheme
+import kotlinx.coroutines.delay
 
 
 typealias DrawBunch = List<DrawObject>
@@ -142,6 +142,17 @@ class MainActivity : ComponentActivity() {
                         mutableStateOf(false)
                     }
 
+                    val unselectSignal = remember {
+                        mutableStateOf(false)
+                    }
+
+                    LaunchedEffect(unselectSignal.value) {
+                        if (unselectSignal.value) {
+                            delay(1000)
+                            unselectSignal.value = false
+                        }
+                    }
+
                     val turnTool: (ToolType) -> Unit = {
                         currentSize.value = null
                         currentTextSize.value = null
@@ -204,6 +215,8 @@ class MainActivity : ComponentActivity() {
                                             )
                                         },
                                         onClick = {
+                                            unselectSignal.value = true
+
                                             val newUnDoStack = drawBunch.value.toMutableList()
 
                                             if (newUnDoStack.isEmpty()) {
@@ -248,6 +261,7 @@ class MainActivity : ComponentActivity() {
                                             )
                                         },
                                         onClick = {
+                                            unselectSignal.value = true
                                             val newRedoStack = reDoStack.value.toMutableList()
 
                                             if (newRedoStack.isEmpty()) {
@@ -292,6 +306,7 @@ class MainActivity : ComponentActivity() {
                                             )
                                         },
                                         onClick = {
+                                            unselectSignal.value = true
                                             val newUnDoStack = drawBunch.value.toMutableList()
 
                                             if (newUnDoStack.isEmpty()) {
@@ -434,10 +449,6 @@ class MainActivity : ComponentActivity() {
                                     DrawingScreen(
                                         image = bitmap,
                                         drawObjectIdCounter = drawObjectIdCounter,
-                                        setCanvasSize = { canvasSize ->
-                                            canvasHeight = canvasSize.height
-                                            canvasWidth = canvasSize.width
-                                        },
                                         currentColor = currentColor,
                                         currentSize = currentSize,
                                         currentTextSize = currentTextSize,
@@ -445,7 +456,12 @@ class MainActivity : ComponentActivity() {
                                         selectTool = selectTool,
                                         afTextTool = afTextTool,
                                         straightLine = straightLine,
+                                        unselectSignal = unselectSignal,
                                         drawBunch = drawBunch,
+                                        setCanvasSize = { canvasSize ->
+                                            canvasHeight = canvasSize.height
+                                            canvasWidth = canvasSize.width
+                                        },
                                         setTextDialogIsEnable = {
                                             showDialog = true
                                         },
@@ -552,6 +568,7 @@ class MainActivity : ComponentActivity() {
         selectTool: MutableState<Any?>,
         afTextTool: MutableState<Any?>,
         straightLine: MutableState<Any?>,
+        unselectSignal: MutableState<Boolean>,
         setCanvasSize: (canvasSize: Size) -> Unit,
         setTextDialogIsEnable: (Boolean) -> Unit,
         addDrawTextObjectInBunch: (text: DrawText) -> Unit,
@@ -573,6 +590,7 @@ class MainActivity : ComponentActivity() {
             currentColor = currentColor,
             textPosition = textPosition,
             currentTextSize = currentTextSize,
+            unselectSignal = unselectSignal,
             addDrawTextObjectInBunch = addDrawTextObjectInBunch,
             clearCurrentDragObjectList = {
                 currentDragObject.clear()
@@ -773,11 +791,18 @@ class MainActivity : ComponentActivity() {
         currentColor: MutableState<Color>,
         textPosition: Offset,
         currentTextSize: MutableState<Int?>,
+        unselectSignal: MutableState<Boolean>,
         resetTextPosition: () -> Unit,
         addDrawTextObjectInBunch: (text: DrawText) -> Unit
     ) {
         LaunchedEffect(selectTool.value) {
             if (selectTool.value == null) {
+                clearCurrentDragObjectList.invoke()
+            }
+        }
+
+        LaunchedEffect(unselectSignal.value) {
+            if (unselectSignal.value) {
                 clearCurrentDragObjectList.invoke()
             }
         }
